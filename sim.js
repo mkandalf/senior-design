@@ -19,20 +19,32 @@
 	var TRANSIT = 1;
 	var REPOSITIONING = 3;
 
-	var Server = function(loc) {
+	var Server = function(loc, policy) {
 		this.x = loc.x;
 		this.y = loc.y;
+		this.policy = policy;
+		this.policy.maybeTakeAction = this.policy.maybeTakeAction.bind(this);
+		this.policy.onNewDemand = this.policy.onNewDemand.bind(this);
 		this.state = 0; // 0: idle, 1: transit, 2: service, 3: repositioning
 		this.arrivalEvent = null;
 	};
 
-	Server.prototype = {
-		onNewDemand: function(state, queue, demand){
-			// Alg specific
-			this.maybeTakeAction(state, queue);
+	// TODO: Figure out multi vehicle policies
+	var FCFSPolicy = {
+		maybeTakeAction: function(state, queue) {
+			if (this.state === IDLE) {
+				if (state.demands.length) {
+					this.goToDemand(state, queue, state.demands[0]);
+				}
+			}
 		},
-		maybeTakeAction: function(state, queue){
-			// Alg specific
+		onNewDemand: function(state, queue, demand) {
+			this.maybeTakeAction(state, queue);
+		}
+	};
+
+	var ReturnToMedianPolicy = {
+		maybeTakeAction: function(state, queue) {
 			if (this.state === REPOSITIONING && state.demands.length) {
 				this.updateCurrentLocation(state);
 				queue.remove(this.arrivalEvent);
@@ -47,6 +59,56 @@
 					this.goToLocation(state, queue, median, this.maybeTakeAction.bind(this), {str: 'Repositioned to median'});
 				}
 			}
+		},
+		onNewDemand: function(state, queue, demand) {
+			this.maybeTakeAction(state, queue);
+		}
+	};
+
+	var ReturnPartwayToMedianPolicy = function(alpha) {
+		if (alpha <= 0 || alpha >= 1) {
+			throw "Please instantiate return partway to median policy with a valid 0 < alpha < 1";
+		}
+		return {
+			init: function() {
+				this.mustReposition = false;
+			},
+			maybeTakeAction: function(state, queue) {
+				if (this.state === REPOSITIONING && state.demands.length) {
+					this.updateCurrentLocation(state);
+					queue.remove(this.arrivalEvent);
+					this.arrivalEvent = null;
+					this.state = IDLE;
+				}
+				if (this.state === IDLE) {
+					if (state.demands.length) {
+						this.mustReposition = true;
+						this.goToDemand(state, queue, state.demands[0]);
+					} else if ((this.x !== median.x || this.y !== median.y) && this.mustReposition) {
+						this.state = REPOSITIONING;
+						var destination = {
+							x: this.x + alpha * (median.x - this.x),
+							y: this.y + alpha * (median.y - this.y)
+						};
+						this.goToLocation(state, queue, destination, function(state, queue) {
+							this.mustReposition = false;
+							this.maybeTakeAction(state, queue);
+						}.bind(this), {str: 'Repositioned partway'});
+					}
+				}
+			},
+			onNewDemand: function(state, queue, demand) {
+				this.maybeTakeAction(state, queue);
+			}
+		};
+	}
+
+	Server.prototype = {
+		onNewDemand: function(state, queue, demand){
+			this.policy.onNewDemand(state, queue, demand);
+		},
+		maybeTakeAction: function(state, queue){
+			this.policy.maybeTakeAction(state, queue);
 		},
 		updateCurrentLocation: function(state){
 			var start = this.arrivalEvent.metadata.start;
@@ -98,6 +160,7 @@
 
 	Demand.prototype = {
 		service: function(state){
+			// If we want service time not to be zero, we can add a callback here
 			var idx = state.demands.indexOf(this);
 			if (idx === -1) {
 				throw "Tried to service demand twice";
@@ -136,7 +199,7 @@
 		
 	};
 
-	(function run(){
+	function run(){
 		var state = {
 			time: 0,
 			demands: [],
@@ -159,7 +222,9 @@
 		};
 
 		scheduleNextDemand(state, eventQueue);
-		state.servers.push(new Server(median));
+		//state.servers.push(new Server(median, FCFSPolicy));
+		//state.servers.push(new Server(median, ReturnToMedianPolicy));
+		state.servers.push(new Server(median, ReturnPartwayToMedianPolicy(0.2)));
 
 		var count = 0;
 		while (eventQueue.length && count < 1000) {
@@ -171,5 +236,6 @@
 		}
 		console.log(stats.waitTimeOfServiced / stats.numServiced);
 		console.log(stats.distanceTraveled / stats.numDemands);
-	})();
+	}
+	run();
 })();
