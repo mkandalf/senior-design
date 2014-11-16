@@ -1,18 +1,94 @@
 (function(){
 	"use strict";
 
-	var config = {
-		lambda: 0.01,
-		v: 1,
-	};
-
-	var median = {x: 0.5, y: 0.5};
+	var config;
 
 	var stats = {
 		numDemands: 0,
 		numServiced: 0,
 		distanceTraveled: 0,
 		waitTimeOfServiced: 0
+	};
+
+	function Region() {
+		if (this.constructor === Region) {
+			throw "Can't instantiate abstract class";
+		}
+	};
+
+	Region.prototype = {
+		median: function() {
+			throw "Abstract method";
+		},
+		uniformPoint: function() {
+			throw "Abstract method";
+		},
+		split: function(n) {
+			throw "Abstract method";
+		},
+		contains: function(p) {
+			throw "Abstract method";
+		}
+	};
+
+	function Square(size, lowerLeft) {
+		this.size = size;
+		this.lowerLeft = lowerLeft;
+	}
+	Square.prototype = Object.create(Region.prototype);
+	Square.prototype.constructor = Square;
+	Square.prototype.median = function() {
+		return {x: this.size/2 + this.lowerLeft.x, y: this.size/2 + this.lowerLeft.y};
+	};
+	Square.prototype.uniformPoint = function() {
+		return {x: Math.random(0,this.size) + this.lowerLeft.x, y: Math.random(0,this.size) + this.lowerLeft.y};
+	};
+	Square.prototype.split = function(n) {
+		if (Math.sqrt(n)*Math.sqrt(n) !== n) {
+			throw "Cannot split square into a non-square number of regions";
+		}
+		var root = Math.sqrt(n);
+		var ret = [];
+		for (var i = 0; i < root; i+=1) {
+			for (var j = 0; j < root; j+=1) {
+				ret.push(new Square(this.size/root, {x:this.lowerLeft.x + this.size * i / root, y:this.lowerLeft.y + this.size * j / root}));
+			}
+		}
+		return ret;
+	};
+	Square.prototype.contains = function(p) {
+		return (this.lowerLeft.x <= p.x && this.lowerLeft.x + this.size >= p.x) &&
+			   (this.lowerLeft.y <= p.y && this.lowerLeft.y + this.size >= p.y);
+	};
+
+	function Circle(radius, lowerLeft) {
+		this.radius = radius;
+		this.lowerLeft = lowerLeft;
+	}
+	Circle.prototype = Object.create(Region.prototype);
+	Circle.prototype.constructor = Circle;
+	Circle.prototype.median = function() {
+		return {x: this.radius + this.lowerLeft.x, y: this.radius + this.lowerLeft.y};
+	};
+	Circle.prototype.uniformPoint = function() {
+		while (true) {
+			var test = {x: Math.random(0,this.radius * 2) + this.lowerLeft.x, y: Math.random(0,this.radius * 2) + this.lowerLeft.y};
+			if (this.contains(test)) {
+				return test;
+			}
+		}
+	};
+	Circle.prototype.split = function(n) {
+		throw "unimplemented";
+	};
+	Circle.prototype.contains = function(p) {
+		var shifted = {
+			x: p.x - this.lowerLeft.x - this.radius,
+			y: p.y - this.lowerLeft.y - this.radius
+		};
+		if (shifted.x * shifted.x + shifted.y * shifted.y <= this.radius * this.radius) {
+			return true;
+		}
 	};
 
 	var IDLE = 0;
@@ -54,9 +130,9 @@
 			if (this.state === IDLE) {
 				if (state.demands.length) {
 					this.goToDemand(state, queue, state.demands[0]);
-				} else if (this.x !== median.x || this.y !== median.y) {
+				} else if (this.x !== config.region.median().x || this.y !== config.region.median().y) {
 					this.state = REPOSITIONING;
-					this.goToLocation(state, queue, median, this.maybeTakeAction.bind(this), {str: 'Repositioned to median'});
+					this.goToLocation(state, queue, config.region.median(), this.maybeTakeAction.bind(this), {str: 'Repositioned to median'});
 				}
 			}
 		},
@@ -84,11 +160,11 @@
 					if (state.demands.length) {
 						this.mustReposition = true;
 						this.goToDemand(state, queue, state.demands[0]);
-					} else if ((this.x !== median.x || this.y !== median.y) && this.mustReposition) {
+					} else if ((this.x !== config.region.median().x || this.y !== config.region.median().y) && this.mustReposition) {
 						this.state = REPOSITIONING;
 						var destination = {
-							x: this.x + alpha * (median.x - this.x),
-							y: this.y + alpha * (median.y - this.y)
+							x: this.x + alpha * (config.region.median().x - this.x),
+							y: this.y + alpha * (config.region.median().y - this.y)
 						};
 						this.goToLocation(state, queue, destination, function(state, queue) {
 							this.mustReposition = false;
@@ -151,9 +227,9 @@
 		}
 	};
 
-	var Demand = function(x, y, createdAt, demandNum) {
-		this.x = x;
-		this.y = y;
+	var Demand = function(loc, createdAt, demandNum) {
+		this.x = loc.x;
+		this.y = loc.y;
 		this.createdAt = createdAt;
 		this.demandNum = demandNum;
 	};
@@ -177,7 +253,7 @@
 
 	var genDemand = function(state, demandNum) {
 		// Can change this to do a circle...
-		return new Demand(Math.random(0,1), Math.random(0,1), state.time, demandNum);
+		return new Demand(config.region.uniformPoint(), state.time, demandNum);
 	};
 
 	var addDemand = function(state, queue, demandNum) {
@@ -200,6 +276,12 @@
 	};
 
 	function run(){
+		config = {
+			lambda: 0.01,
+			v: 1,
+			region: new Circle(0.5, {x: 0, y: 0})
+		};
+
 		var state = {
 			time: 0,
 			demands: [],
@@ -222,20 +304,20 @@
 		};
 
 		scheduleNextDemand(state, eventQueue);
-		//state.servers.push(new Server(median, FCFSPolicy));
-		//state.servers.push(new Server(median, ReturnToMedianPolicy));
-		state.servers.push(new Server(median, ReturnPartwayToMedianPolicy(0.2)));
+		//state.servers.push(new Server(config.region.median(), FCFSPolicy));
+		//state.servers.push(new Server(config.region.median(), ReturnToMedianPolicy));
+		state.servers.push(new Server(config.region.median(), ReturnPartwayToMedianPolicy(0.2)));
 
 		var count = 0;
 		while (eventQueue.length && count < 1000) {
 			count += 1;
 			var nextEvent = eventQueue.dequeue();
 			state.time = nextEvent.time;
-			console.log('(' + Math.floor(state.time * 100) / 100 + ')', nextEvent.metadata.str);
+			console.log('(' + Math.floor(state.time * 100) / 100 + 's)', nextEvent.metadata.str);
 			nextEvent.execute(state, eventQueue);
 		}
-		console.log(stats.waitTimeOfServiced / stats.numServiced);
-		console.log(stats.distanceTraveled / stats.numDemands);
+		console.log("Average wait time of serviced demands", stats.waitTimeOfServiced / stats.numServiced);
+		console.log("Average distance traveled per serviced demand", stats.distanceTraveled / stats.numDemands);
 	}
 	run();
 })();
