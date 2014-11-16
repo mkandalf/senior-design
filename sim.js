@@ -237,6 +237,7 @@
     Demand.prototype = {
         service: function(state){
             // If we want service time not to be zero, we can add a callback here
+            // TODO: Add demand serviced animation to animation list here, if necessary
             var idx = state.demands.indexOf(this);
             if (idx === -1) {
                 throw "Tried to service demand twice";
@@ -258,6 +259,7 @@
 
     var addDemand = function(state, queue, demandNum) {
         var newDemand = genDemand(state, demandNum);
+        // TODO: Add demand creation animation to animation list here, if necessary
         state.demands.push(newDemand);
         for (var i = 0; i < state.servers.length; i+=1) {
             state.servers[i].onNewDemand(state, queue, newDemand);
@@ -272,14 +274,24 @@
             addDemand(state, queue, demandNum);
             scheduleNextDemand(state, queue);
         }, 'demand', {demandNum: demandNum, str: 'Demand appeared num ' + demandNum});
+    };
+
+    var scheduleNextAnimationFrame = function(state, queue){
+        var delay = config.simulationSpeed / config.fps;
+        queue.schedule(delay, function(state, queue){
+            // TODO: Render frame here
+            scheduleNextAnimationFrame(state, queue);
+        }, 'frame');
         
     };
 
     function run(){
         config = {
-            lambda: 0.01,
+            lambda: 0.1,
             v: 1,
-            region: new Circle(0.5, {x: 0, y: 0})
+            region: new Circle(0.5, {x: 0, y: 0}),
+            simulationSpeed: 1,
+            fps: 30
         };
 
         var state = {
@@ -297,23 +309,26 @@
                 scheduledAt: state.time,
                 execute: execFunc,
                 type: type,
-                metadata: metadata ? metadata : null
+                metadata: metadata ? metadata : {}
             };
             this.queue(data);
             return data;
         };
 
         scheduleNextDemand(state, eventQueue);
+        scheduleNextAnimationFrame(state, eventQueue);
         //state.servers.push(new Server(config.region.median(), FCFSPolicy));
         //state.servers.push(new Server(config.region.median(), ReturnToMedianPolicy));
         state.servers.push(new Server(config.region.median(), new ReturnPartwayToMedianPolicy(0.5)));
 
         var count = 0;
         while (eventQueue.length && count < 100) {
-            count += 1;
             var nextEvent = eventQueue.dequeue();
             state.time = nextEvent.time;
-            console.log('(' + Math.floor(state.time * 100) / 100 + 's)', nextEvent.metadata.str);
+            if (nextEvent.type != 'frame') {
+                count += 1;
+                console.log('(' + Math.floor(state.time * 100) / 100 + 's)', nextEvent.metadata.str);
+            }
             nextEvent.execute(state, eventQueue);
         }
         console.log("Average wait time of serviced demands", stats.waitTimeOfServiced / stats.numServiced);
