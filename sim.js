@@ -69,7 +69,16 @@ var imageCollector = function(expectedCount, completeFn){
                (this.lowerLeft.y <= p.y && this.lowerLeft.y + this.size >= p.y);
     };
     Square.prototype.draw = function(ctx, scale) {
+        ctx.lineWidth = 5;
+        ctx.strokeStyle = "#000000";
         ctx.strokeRect(this.lowerLeft.x * scale, this.lowerLeft.y * scale, this.size * scale, this.size * scale);
+        ctx.beginPath();
+        ctx.arc(scale * this.median.x - 2, scale * this.median.y - 2, 4, 0, 2 * Math.PI, false);
+        //ctx.fillStyle = 'green';
+        ctx.fill();
+        ctx.lineWidth = 3;
+        //ctx.strokeStyle = "#003300";
+        ctx.stroke();
     }
 
     function Circle(radius, lowerLeft) {
@@ -137,7 +146,6 @@ var imageCollector = function(expectedCount, completeFn){
     PartitionStrategy.prototype = {
         onNewDemand: function(state, queue, demand) {
             for (var i = 0; i < this.partition.length; i++) {
-              console.log(i, this.partition[i].lowerLeft, demand, this.partition[i].size);
                 if (this.partition[i].contains({x: demand.x, y: demand.y})) {
                     this.servers[i].onNewDemand(state, queue, demand);
                 }
@@ -343,7 +351,8 @@ var imageCollector = function(expectedCount, completeFn){
         queue.schedule(delay, function(state, queue, cb){
             ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
             var demand_count = state['demands'].length;
-            config.strategy.draw(ctx, scale);
+            //config.strategy.draw(ctx, scale);
+            config.region.draw(ctx, scale);
             for (var i=0; i < demand_count; i++) {
               var coords = (state.demands[i].x * scale) + "," + (state.demands[i].y * scale);
               if (typeof(demand_dict[coords]) !== 'undefined') {
@@ -353,15 +362,14 @@ var imageCollector = function(expectedCount, completeFn){
               else {
                 var random = demand_list[Math.floor(Math.random() * demand_list.length)]
                 demand_dict[coords] = random;
-                ctx.drawImage(random, (state.demands[i].x * scale) - (random.width/2),
-                  (75/2), 75,75);
+                ctx.drawImage(random, (state.demands[i].x * scale) - (75/2),
+                  (state.demands[i].y * scale) - (75/2), 75,75);
               }
             }
             for (var i = 0; i < state.servers.length; i++) {
               state.servers[i].updateCurrentLocation(state, queue);
               ctx.drawImage(img, state.servers[i].x * scale - (100 / 2), state.servers[i].y * scale - (50 / 2), 100, 50);
             }
-            config.region.draw(ctx, scale);
             scheduleNextAnimationFrame(state, queue, scale, img, ctx, demand_list, demand_dict, canvas);
             requestAnimationFrame(cb);
         }, 'frame');
@@ -370,7 +378,7 @@ var imageCollector = function(expectedCount, completeFn){
 
     function run(){
         config = {
-            lambda: 8,
+            lambda: 2.2 * 4,
             v: .7,
             region: new Square(0.5, {x: 0, y: 0}),
             simulationSpeed: .1,
@@ -398,7 +406,7 @@ var imageCollector = function(expectedCount, completeFn){
             return data;
         };
 
-        config.strategy = new PartitionStrategy(9);
+        config.strategy = new PartitionStrategy(4);
         state.servers = config.strategy.getServers();
 
         var canvas = document.getElementById('canvas');
