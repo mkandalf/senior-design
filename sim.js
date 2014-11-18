@@ -29,9 +29,6 @@ var imageCollector = function(expectedCount, completeFn){
     }
 
     Region.prototype = {
-        median: function() {
-            throw "Abstract method";
-        },
         uniformPoint: function() {
             throw "Abstract method";
         },
@@ -47,14 +44,12 @@ var imageCollector = function(expectedCount, completeFn){
         this.size = size;
         this.lowerLeft = lowerLeft;
         this.upperRight = {x: size + lowerLeft.x, y: size + lowerLeft.y};
+        this.median = {x: this.size/2 + this.lowerLeft.x, y: this.size/2 + this.lowerLeft.y};
     }
     Square.prototype = Object.create(Region.prototype);
     Square.prototype.constructor = Square;
-    Square.prototype.median = function() {
-        return {x: this.size/2 + this.lowerLeft.x, y: this.size/2 + this.lowerLeft.y};
-    };
     Square.prototype.uniformPoint = function() {
-        return {x: Math.random(0,this.size) + this.lowerLeft.x, y: Math.random(0,this.size) + this.lowerLeft.y};
+        return {x: Math.random() * this.size + this.lowerLeft.x, y: Math.random() * this.size + this.lowerLeft.y};
     };
     Square.prototype.split = function(n) {
         if (Math.sqrt(n)*Math.sqrt(n) !== n) {
@@ -73,17 +68,18 @@ var imageCollector = function(expectedCount, completeFn){
         return (this.lowerLeft.x <= p.x && this.lowerLeft.x + this.size >= p.x) &&
                (this.lowerLeft.y <= p.y && this.lowerLeft.y + this.size >= p.y);
     };
+    Square.prototype.draw = function(ctx, scale) {
+        ctx.strokeRect(this.lowerLeft.x * scale, this.lowerLeft.y * scale, this.size * scale, this.size * scale);
+    }
 
     function Circle(radius, lowerLeft) {
         this.radius = radius;
         this.lowerLeft = lowerLeft;
         this.upperRight = {x: 2 * radius + lowerLeft.x, y: 2 * radius + lowerLeft.y};
+        this.median = {x: this.radius + this.lowerLeft.x, y: this.radius + this.lowerLeft.y};
     }
     Circle.prototype = Object.create(Region.prototype);
     Circle.prototype.constructor = Circle;
-    Circle.prototype.median = function() {
-        return {x: this.radius + this.lowerLeft.x, y: this.radius + this.lowerLeft.y};
-    };
     Circle.prototype.uniformPoint = function() {
         while (true) {
             var test = {x: Math.random(0,this.radius * 2) + this.lowerLeft.x, y: Math.random(0,this.radius * 2) + this.lowerLeft.y};
@@ -106,7 +102,7 @@ var imageCollector = function(expectedCount, completeFn){
     };
     Circle.prototype.draw = function(ctx, scale) {
           ctx.beginPath();
-          ctx.arc(scale * config.region.median().x, scale * config.region.median().y, scale * config.region.radius, 0, 2 * Math.PI, false);
+          ctx.arc(scale * config.region.median.x, scale * config.region.median.y, scale * config.region.radius, 0, 2 * Math.PI, false);
           ctx.fillStyle = 'green';
           //ctx.fill();
           ctx.lineWidth = 3;
@@ -118,48 +114,85 @@ var imageCollector = function(expectedCount, completeFn){
     var TRANSIT = 1;
     var REPOSITIONING = 3;
 
-    var Server = function(loc, policy) {
+    var Server = function(loc, policy, median) {
+        this.median = median ? median : config.region.median;
         this.x = loc.x;
         this.y = loc.y;
         this.policy = policy;
         this.policy.maybeTakeAction = this.policy.maybeTakeAction.bind(this);
         this.policy.onNewDemand = this.policy.onNewDemand.bind(this);
+        this.policy.init();
+        this.demands = [];
         this.state = 0; // 0: idle, 1: transit, 2: service, 3: repositioning
         this.arrivalEvent = null;
     };
 
+    var PartitionStrategy = function(n) {
+        this.partition = config.region.split(n);
+        this.servers = [];
+        for (var i = 0; i < n; i+=1) {
+            this.servers.push(new Server(this.partition[i].median, new ReturnPartwayToMedianPolicy(0.5), this.partition[i].median));
+        }
+    };
+    PartitionStrategy.prototype = {
+        onNewDemand: function(state, queue, demand) {
+            for (var i = 0; i < this.partition.length; i++) {
+              console.log(i, this.partition[i].lowerLeft, demand, this.partition[i].size);
+                if (this.partition[i].contains({x: demand.x, y: demand.y})) {
+                    this.servers[i].onNewDemand(state, queue, demand);
+                }
+            }
+        },
+        getServers: function() {
+            return this.servers;
+        },
+        draw: function(ctx, scale) {
+          for (var i = 0; i < this.partition.length; i++) {
+            this.partition[i].draw(ctx, scale);
+          }
+        }
+    };
+
     // TODO: Figure out multi vehicle policies
     var FCFSPolicy = {
+        init: function() {
+            this.demands = [];
+        },
         maybeTakeAction: function(state, queue) {
             if (this.state === IDLE) {
-                if (state.demands.length) {
-                    this.goToDemand(state, queue, state.demands[0]);
+                if (this.demands.length) {
+                    this.goToDemand(state, queue, this.demands[0]);
                 }
             }
         },
         onNewDemand: function(state, queue, demand) {
+            this.demands.push(demand);
             this.maybeTakeAction(state, queue);
         }
     };
 
     var ReturnToMedianPolicy = {
+        init: function() {
+            this.demands = [];
+        },
         maybeTakeAction: function(state, queue) {
-            if (this.state === REPOSITIONING && state.demands.length) {
+            if (this.state === REPOSITIONING && this.demands.length) {
                 this.updateCurrentLocation(state);
                 queue.remove(this.arrivalEvent);
                 this.arrivalEvent = null;
                 this.state = IDLE;
             }
             if (this.state === IDLE) {
-                if (state.demands.length) {
-                    this.goToDemand(state, queue, state.demands[0]);
-                } else if (this.x !== config.region.median().x || this.y !== config.region.median().y) {
+                if (this.demands.length) {
+                    this.goToDemand(state, queue, this.demands[0]);
+                } else if (this.x !== this.median.x || this.y !== this.median.y) {
                     this.state = REPOSITIONING;
-                    this.goToLocation(state, queue, config.region.median(), this.maybeTakeAction.bind(this), {str: 'Repositioned to median'});
+                    this.goToLocation(state, queue, this.median, this.maybeTakeAction.bind(this), {str: 'Repositioned to median'});
                 }
             }
         },
         onNewDemand: function(state, queue, demand) {
+            this.demands.push(demand);
             this.maybeTakeAction(state, queue);
         }
     };
@@ -170,24 +203,25 @@ var imageCollector = function(expectedCount, completeFn){
         }
         return {
             init: function() {
+                this.demands = [];
                 this.mustReposition = false;
             },
             maybeTakeAction: function(state, queue) {
-                if (this.state === REPOSITIONING && state.demands.length) {
+                if (this.state === REPOSITIONING && this.demands.length) {
                     this.updateCurrentLocation(state);
                     queue.remove(this.arrivalEvent);
                     this.arrivalEvent = null;
                     this.state = IDLE;
                 }
                 if (this.state === IDLE) {
-                    if (state.demands.length) {
+                    if (this.demands.length) {
                         this.mustReposition = true;
-                        this.goToDemand(state, queue, state.demands[0]);
-                    } else if ((this.x !== config.region.median().x || this.y !== config.region.median().y) && this.mustReposition) {
+                        this.goToDemand(state, queue, this.demands[0]);
+                    } else if ((this.x !== this.median.x || this.y !== this.median.y) && this.mustReposition) {
                         this.state = REPOSITIONING;
                         var destination = {
-                            x: this.x + alpha * (config.region.median().x - this.x),
-                            y: this.y + alpha * (config.region.median().y - this.y)
+                            x: this.x + alpha * (this.median.x - this.x),
+                            y: this.y + alpha * (this.median.y - this.y)
                         };
                         this.goToLocation(state, queue, destination, function(state, queue) {
                             this.mustReposition = false;
@@ -197,6 +231,7 @@ var imageCollector = function(expectedCount, completeFn){
                 }
             },
             onNewDemand: function(state, queue, demand) {
+                this.demands.push(demand);
                 this.maybeTakeAction(state, queue);
             }
         };
@@ -226,6 +261,7 @@ var imageCollector = function(expectedCount, completeFn){
             this.state = TRANSIT;
             this.goToLocation(state, queue, demand, function(state, queue){
                 demand.service(state);
+                self.demands.shift();
                 self.maybeTakeAction(state, queue);
             }, {demandNum: demand.demandNum, str: 'Arrived at demand ' + demand.demandNum});
         },
@@ -288,9 +324,7 @@ var imageCollector = function(expectedCount, completeFn){
         var newDemand = genDemand(state, demandNum);
         // TODO: Add demand creation animation to animation list here, if necessary
         state.demands.push(newDemand);
-        for (var i = 0; i < state.servers.length; i+=1) {
-            state.servers[i].onNewDemand(state, queue, newDemand);
-        }
+        config.strategy.onNewDemand(state, queue, newDemand);
     };
 
     var scheduleNextDemand = function(state, queue){
@@ -304,29 +338,31 @@ var imageCollector = function(expectedCount, completeFn){
         }, 'demand', {demandNum: demandNum, str: 'Demand appeared num ' + demandNum});
     };
 
-    var scheduleNextAnimationFrame = function(state, queue, scale, img, ctx, demand_list, demand_dict){
+    var scheduleNextAnimationFrame = function(state, queue, scale, img, ctx, demand_list, demand_dict, canvas){
         var delay = config.simulationSpeed / config.fps;
         queue.schedule(delay, function(state, queue, cb){
-            state.servers[0].updateCurrentLocation(state, queue);
             ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-            var demand_count = state['demands'].length
+            var demand_count = state['demands'].length;
+            config.strategy.draw(ctx, scale);
             for (var i=0; i < demand_count; i++) {
               var coords = (state.demands[i].x * scale) + "," + (state.demands[i].y * scale);
               if (typeof(demand_dict[coords]) !== 'undefined') {
-                ctx.drawImage(demand_dict[coords], (state.demands[i].x * scale) - (demand_dict[coords].width/2),
-                  (state.demands[i].y * scale) - (demand_dict[coords].height/2), 100,100);
+                ctx.drawImage(demand_dict[coords], (state.demands[i].x * scale) - (75/2),
+                  (state.demands[i].y * scale) - (75/2), 75,75);
               }
               else {
                 var random = demand_list[Math.floor(Math.random() * demand_list.length)]
                 demand_dict[coords] = random;
                 ctx.drawImage(random, (state.demands[i].x * scale) - (random.width/2),
-                  (state.demands[i].y * scale) - (random.height/2), 100,100);
+                  (75/2), 75,75);
               }
             }
+            for (var i = 0; i < state.servers.length; i++) {
+              state.servers[i].updateCurrentLocation(state, queue);
+              ctx.drawImage(img, state.servers[i].x * scale - (100 / 2), state.servers[i].y * scale - (50 / 2), 100, 50);
+            }
             config.region.draw(ctx, scale);
-            ctx.drawImage(img, (state.servers[0].x * scale) - (img.width/2),
-              (state.servers[0].y * scale) - (img.height/2), 100, 50);
-            scheduleNextAnimationFrame(state, queue, scale, img, ctx, demand_list, demand_dict);
+            scheduleNextAnimationFrame(state, queue, scale, img, ctx, demand_list, demand_dict, canvas);
             requestAnimationFrame(cb);
         }, 'frame');
         
@@ -334,10 +370,10 @@ var imageCollector = function(expectedCount, completeFn){
 
     function run(){
         config = {
-            lambda: 1.4,
-            v: 1,
-            region: new Circle(0.5, {x: 0, y: 0}),
-            simulationSpeed: .2,
+            lambda: 8,
+            v: .7,
+            region: new Square(0.5, {x: 0, y: 0}),
+            simulationSpeed: .1,
             fps: 30
         };
 
@@ -361,6 +397,10 @@ var imageCollector = function(expectedCount, completeFn){
             this.queue(data);
             return data;
         };
+
+        config.strategy = new PartitionStrategy(9);
+        state.servers = config.strategy.getServers();
+
         var canvas = document.getElementById('canvas');
         var scale = canvas.width / Math.max(config.region.upperRight.x, config.region.upperRight.y);
         var ctx = canvas.getContext('2d');
@@ -379,11 +419,11 @@ var imageCollector = function(expectedCount, completeFn){
           scheduleNextDemand(state, eventQueue);
           //img.onload = function(){
           //
-          scheduleNextAnimationFrame(state, eventQueue, scale, img, ctx, demand_list, {});
+          scheduleNextAnimationFrame(state, eventQueue, scale, img, ctx, demand_list, {}, canvas);
           //};
           //state.servers.push(new Server(config.region.median(), FCFSPolicy));
           //state.servers.push(new Server(config.region.median(), ReturnToMedianPolicy));
-          state.servers.push(new Server(config.region.median(), new ReturnPartwayToMedianPolicy(0.5)));
+          //state.servers.push(new Server(config.region.median(), new ReturnPartwayToMedianPolicy(0.5)));
 
           var count = 0;
           var runNext = function() {
