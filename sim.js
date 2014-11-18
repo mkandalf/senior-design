@@ -41,7 +41,7 @@
         return {x: this.size/2 + this.lowerLeft.x, y: this.size/2 + this.lowerLeft.y};
     };
     Square.prototype.uniformPoint = function() {
-        return {x: Math.random(0,this.size) + this.lowerLeft.x, y: Math.random(0,this.size) + this.lowerLeft.y};
+        return {x: Math.random() * this.size + this.lowerLeft.x, y: Math.random * this.size + this.lowerLeft.y};
     };
     Square.prototype.split = function(n) {
         if (Math.sqrt(n)*Math.sqrt(n) !== n) {
@@ -72,7 +72,7 @@
     };
     Circle.prototype.uniformPoint = function() {
         while (true) {
-            var test = {x: Math.random(0,this.radius * 2) + this.lowerLeft.x, y: Math.random(0,this.radius * 2) + this.lowerLeft.y};
+            var test = {x: Math.random() * this.radius * 2 + this.lowerLeft.x, y: Math.random() * this.radius * 2 + this.lowerLeft.y};
             if (this.contains(test)) {
                 return test;
             }
