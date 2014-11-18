@@ -291,13 +291,17 @@ function sleep(milliseconds) {
     };
 
     var scheduleNextAnimationFrame = function(state, queue, scale, img, ctx){
-        var scale = scale;
-        var ctx = ctx;
         var delay = config.simulationSpeed / config.fps;
-        var img = img;
         queue.schedule(delay, function(state, queue, cb){
             state.servers[0].updateCurrentLocation(state, queue);
             ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+            ctx.beginPath();
+            ctx.arc(scale * config.region.median().x, scale * config.region.median().y, scale * config.region.radius, 0, 2 * Math.PI, false);
+            ctx.fillStyle = 'green';
+            //ctx.fill();
+            ctx.lineWidth = 3;
+            ctx.strokeStyle = "#003300";
+            ctx.stroke();
             ctx.drawImage(img, state.servers[0].x * scale, 
               state.servers[0].y * scale, 100, 50);
             scheduleNextAnimationFrame(state, queue, scale, img, ctx);
@@ -340,34 +344,34 @@ function sleep(milliseconds) {
         var ctx = canvas.getContext('2d');
         var img = new Image();
         img.src = 'drone.jpg'
-        img.onload = function(){
-          ctx.drawImage(img, config.region.lowerLeft.x * scale, 
-              config.region.lowerLeft.y * scale, 100, 50);
-        scheduleNextDemand(state, eventQueue);
-        //img.onload = function(){
-        //
-        scheduleNextAnimationFrame(state, eventQueue, scale, img, ctx);
-        //};
-        //state.servers.push(new Server(config.region.median(), FCFSPolicy));
-        //state.servers.push(new Server(config.region.median(), ReturnToMedianPolicy));
-        state.servers.push(new Server(config.region.median(), new ReturnPartwayToMedianPolicy(0.5)));
+          img.onload = function(){
+            ctx.drawImage(img, config.region.lowerLeft.x * scale, 
+                config.region.lowerLeft.y * scale, 100, 50);
+            scheduleNextDemand(state, eventQueue);
+            //img.onload = function(){
+            //
+            scheduleNextAnimationFrame(state, eventQueue, scale, img, ctx);
+            //};
+            //state.servers.push(new Server(config.region.median(), FCFSPolicy));
+            //state.servers.push(new Server(config.region.median(), ReturnToMedianPolicy));
+            state.servers.push(new Server(config.region.median(), new ReturnPartwayToMedianPolicy(0.5)));
 
-        var count = 0;
-        var runNext = function() {
-            var nextEvent = eventQueue.dequeue();
-            state.time = nextEvent.time;
-            if (nextEvent.type != 'frame') {
+            var count = 0;
+            var runNext = function() {
+              var nextEvent = eventQueue.dequeue();
+              state.time = nextEvent.time;
+              if (nextEvent.type != 'frame') {
                 count += 1;
                 console.log('(' + Math.floor(state.time * 100) / 100 + 's)', nextEvent.metadata.str);
+              }
+              nextEvent.execute(state, eventQueue, runNext);
             }
-            nextEvent.execute(state, eventQueue, runNext);
-        }
-        runNext();
-        //while (eventQueue.length && count < 100) {
-        //}
-        console.log("Average wait time of serviced demands", stats.waitTimeOfServiced / stats.numServiced);
-        console.log("Average distance traveled per serviced demand", stats.distanceTraveled / stats.numDemands);
-    };
+            runNext();
+            //while (eventQueue.length && count < 100) {
+            //}
+            console.log("Average wait time of serviced demands", stats.waitTimeOfServiced / stats.numServiced);
+            console.log("Average distance traveled per serviced demand", stats.distanceTraveled / stats.numDemands);
+          };
     }
-    window.onload = run
+    window.onload = run;
 })();
