@@ -368,7 +368,7 @@ var imageCollector = function(expectedCount, completeFn){
             }
             for (var i = 0; i < state.servers.length; i++) {
               state.servers[i].updateCurrentLocation(state, queue);
-              ctx.drawImage(img, state.servers[i].x * scale - (100 / 2), state.servers[i].y * scale - (50 / 2), 100, 50);
+              ctx.drawImage(img, state.servers[i].x * scale - (75 / 2), state.servers[i].y * scale - (75 / 2), 75, 75);
             }
             scheduleNextAnimationFrame(state, queue, scale, img, ctx, demand_list, demand_dict, canvas);
             requestAnimationFrame(cb);
