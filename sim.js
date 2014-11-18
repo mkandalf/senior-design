@@ -46,6 +46,7 @@ var imageCollector = function(expectedCount, completeFn){
     function Square(size, lowerLeft) {
         this.size = size;
         this.lowerLeft = lowerLeft;
+        this.upperRight = {x: size + lowerLeft.x, y: size + lowerLeft.y};
     }
     Square.prototype = Object.create(Region.prototype);
     Square.prototype.constructor = Square;
@@ -76,6 +77,7 @@ var imageCollector = function(expectedCount, completeFn){
     function Circle(radius, lowerLeft) {
         this.radius = radius;
         this.lowerLeft = lowerLeft;
+        this.upperRight = {x: 2 * radius + lowerLeft.x, y: 2 * radius + lowerLeft.y};
     }
     Circle.prototype = Object.create(Region.prototype);
     Circle.prototype.constructor = Circle;
@@ -101,6 +103,15 @@ var imageCollector = function(expectedCount, completeFn){
         if (shifted.x * shifted.x + shifted.y * shifted.y <= this.radius * this.radius) {
             return true;
         }
+    };
+    Circle.prototype.draw = function(ctx, scale) {
+          ctx.beginPath();
+          ctx.arc(scale * config.region.median().x, scale * config.region.median().y, scale * config.region.radius, 0, 2 * Math.PI, false);
+          ctx.fillStyle = 'green';
+          //ctx.fill();
+          ctx.lineWidth = 3;
+          ctx.strokeStyle = "#003300";
+          ctx.stroke();
     };
 
     var IDLE = 0;
@@ -294,10 +305,7 @@ var imageCollector = function(expectedCount, completeFn){
     };
 
     var scheduleNextAnimationFrame = function(state, queue, scale, img, ctx, demand_img){
-        var scale = scale;
-        var ctx = ctx;
         var delay = config.simulationSpeed / config.fps;
-        var img = img;
         queue.schedule(delay, function(state, queue, cb){
             state.servers[0].updateCurrentLocation(state, queue);
             ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
@@ -306,6 +314,7 @@ var imageCollector = function(expectedCount, completeFn){
               ctx.drawImage(demand_img, state.demands[i].x * scale,
                 state.demands[i].y * scale, 100,100);
             }
+            config.region.draw(ctx, scale);
             ctx.drawImage(img, state.servers[0].x * scale, 
               state.servers[0].y * scale, 100, 50);
             scheduleNextAnimationFrame(state, queue, scale, img, ctx, demand_img);
@@ -344,10 +353,10 @@ var imageCollector = function(expectedCount, completeFn){
             return data;
         };
         var canvas = document.getElementById('canvas');
-        var scale = canvas.width/(config.region.radius*2);
+        var scale = canvas.width / Math.max(config.region.upperRight.x, config.region.upperRight.y);
         var ctx = canvas.getContext('2d');
         var img = new Image();
-        img.src = 'drone.jpg'
+        img.src = 'drone.png'
         var demand_img = new Image();
         demand_img.src = 'fire.jpg'
         img.onload = function() {
@@ -383,5 +392,5 @@ var imageCollector = function(expectedCount, completeFn){
     // img.onload = ic;
     // demand_img.onload = ic;
     }
-    window.onload = run
+    window.onload = run;
 })();
