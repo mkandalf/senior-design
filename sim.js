@@ -1,11 +1,14 @@
-function sleep(milliseconds) {
-  var start = new Date().getTime();
-  for (var i = 0; i < 1e7; i++) {
-    if ((new Date().getTime() - start) > milliseconds){
-      break;
+var imageCollector = function(expectedCount, completeFn){
+  var receivedCount = 0;
+  return function(){
+    if(++receivedCount == expectedCount){
+      completeFn();
+    } else {
+      console.log(receivedCount);
     }
-  }
-}
+  };
+}();
+
 
 (function(){
     "use strict";
@@ -290,7 +293,7 @@ function sleep(milliseconds) {
         }, 'demand', {demandNum: demandNum, str: 'Demand appeared num ' + demandNum});
     };
 
-    var scheduleNextAnimationFrame = function(state, queue, scale, img, ctx){
+    var scheduleNextAnimationFrame = function(state, queue, scale, img, ctx, demand_img){
         var scale = scale;
         var ctx = ctx;
         var delay = config.simulationSpeed / config.fps;
@@ -298,9 +301,14 @@ function sleep(milliseconds) {
         queue.schedule(delay, function(state, queue, cb){
             state.servers[0].updateCurrentLocation(state, queue);
             ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+            var demand_count = state['demands'].length
+            for (var i=0; i < demand_count; i++) {
+              ctx.drawImage(demand_img, state.demands[i].x * scale,
+                state.demands[i].y * scale, 100,100);
+            }
             ctx.drawImage(img, state.servers[0].x * scale, 
               state.servers[0].y * scale, 100, 50);
-            scheduleNextAnimationFrame(state, queue, scale, img, ctx);
+            scheduleNextAnimationFrame(state, queue, scale, img, ctx, demand_img);
             requestAnimationFrame(cb);
         }, 'frame');
         
@@ -340,34 +348,40 @@ function sleep(milliseconds) {
         var ctx = canvas.getContext('2d');
         var img = new Image();
         img.src = 'drone.jpg'
-        img.onload = function(){
-          ctx.drawImage(img, config.region.lowerLeft.x * scale, 
-              config.region.lowerLeft.y * scale, 100, 50);
-        scheduleNextDemand(state, eventQueue);
-        //img.onload = function(){
-        //
-        scheduleNextAnimationFrame(state, eventQueue, scale, img, ctx);
-        //};
-        //state.servers.push(new Server(config.region.median(), FCFSPolicy));
-        //state.servers.push(new Server(config.region.median(), ReturnToMedianPolicy));
-        state.servers.push(new Server(config.region.median(), new ReturnPartwayToMedianPolicy(0.5)));
+        var demand_img = new Image();
+        demand_img.src = 'fire.jpg'
+        img.onload = function() {
+          demand_img.onload = function() {
+            ctx.drawImage(img, config.region.lowerLeft.x * scale, 
+                config.region.lowerLeft.y * scale, 100, 50);
+          scheduleNextDemand(state, eventQueue);
+          //img.onload = function(){
+          //
+          scheduleNextAnimationFrame(state, eventQueue, scale, img, ctx, demand_img);
+          //};
+          //state.servers.push(new Server(config.region.median(), FCFSPolicy));
+          //state.servers.push(new Server(config.region.median(), ReturnToMedianPolicy));
+          state.servers.push(new Server(config.region.median(), new ReturnPartwayToMedianPolicy(0.5)));
 
-        var count = 0;
-        var runNext = function() {
-            var nextEvent = eventQueue.dequeue();
-            state.time = nextEvent.time;
-            if (nextEvent.type != 'frame') {
-                count += 1;
-                console.log('(' + Math.floor(state.time * 100) / 100 + 's)', nextEvent.metadata.str);
-            }
-            nextEvent.execute(state, eventQueue, runNext);
-        }
-        runNext();
-        //while (eventQueue.length && count < 100) {
-        //}
-        console.log("Average wait time of serviced demands", stats.waitTimeOfServiced / stats.numServiced);
-        console.log("Average distance traveled per serviced demand", stats.distanceTraveled / stats.numDemands);
+          var count = 0;
+          var runNext = function() {
+              var nextEvent = eventQueue.dequeue();
+              state.time = nextEvent.time;
+              if (nextEvent.type != 'frame') {
+                  count += 1;
+                  console.log('(' + Math.floor(state.time * 100) / 100 + 's)', nextEvent.metadata.str);
+              }
+              nextEvent.execute(state, eventQueue, runNext);
+          }
+          runNext();
+          //while (eventQueue.length && count < 100) {
+          //}
+          console.log("Average wait time of serviced demands", stats.waitTimeOfServiced / stats.numServiced);
+          console.log("Average distance traveled per serviced demand", stats.distanceTraveled / stats.numDemands);
+      };
     };
+    // img.onload = ic;
+    // demand_img.onload = ic;
     }
     window.onload = run
 })();
