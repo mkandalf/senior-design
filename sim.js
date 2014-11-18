@@ -325,10 +325,10 @@ var imageCollector = function(expectedCount, completeFn){
 
     function run(){
         config = {
-            lambda: .8,
+            lambda: 1.4,
             v: 1,
             region: new Circle(0.5, {x: 0, y: 0}),
-            simulationSpeed: .1,
+            simulationSpeed: .2,
             fps: 30
         };
 
