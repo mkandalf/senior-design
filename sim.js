@@ -394,7 +394,8 @@ var imageCollector = function(expectedCount, completeFn){
             region: new Square(0.5, {x: 0, y: 0}),
             simulationSpeed: .2,
             fps: 30,
-            r: 0.5
+            r: 0.5,
+            n: 4
         };
 
         var state = {
@@ -418,7 +419,7 @@ var imageCollector = function(expectedCount, completeFn){
             return data;
         };
 
-        config.strategy = new PartitionStrategy(4);
+        config.strategy = new PartitionStrategy(config.n);
         state.servers = config.strategy.getServers();
 
         var canvas = document.getElementById('canvas');
@@ -449,6 +450,7 @@ var imageCollector = function(expectedCount, completeFn){
           var runNext = function() {
               config.simulationSpeed = document.getElementById('slider1').value;
               config.r = document.getElementById('slider2').value;
+              config.lambda = document.getElementById('slider3').value * config.n;
               var nextEvent = eventQueue.dequeue();
               state.time = nextEvent.time;
               if (nextEvent.type != 'frame') {
