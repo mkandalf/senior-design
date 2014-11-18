@@ -1,3 +1,12 @@
+function sleep(milliseconds) {
+  var start = new Date().getTime();
+  for (var i = 0; i < 1e7; i++) {
+    if ((new Date().getTime() - start) > milliseconds){
+      break;
+    }
+  }
+}
+
 (function(){
     "use strict";
 
@@ -276,11 +285,18 @@
         }, 'demand', {demandNum: demandNum, str: 'Demand appeared num ' + demandNum});
     };
 
-    var scheduleNextAnimationFrame = function(state, queue){
+    var scheduleNextAnimationFrame = function(state, queue, scale, img, ctx){
+        var scale = scale;
+        var ctx = ctx;
         var delay = config.simulationSpeed / config.fps;
+        var img = img;
+        console.log('got here');
         queue.schedule(delay, function(state, queue){
-            // TODO: Render frame here
-            scheduleNextAnimationFrame(state, queue);
+            ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height)
+            ctx.drawImage(img, state.servers[0].x * scale, 
+              state.servers[0].y * scale, 100, 50);
+            sleep(500);
+            scheduleNextAnimationFrame(state, queue, scale, img, ctx);
         }, 'frame');
         
     };
@@ -314,9 +330,19 @@
             this.queue(data);
             return data;
         };
-
+        var canvas = document.getElementById('canvas');
+        var scale = canvas.width/(config.region.radius*2);
+        var ctx = canvas.getContext('2d');
+        var img = new Image();
+        img.src = 'drone.jpg'
+        img.onload = function(){
+          ctx.drawImage(img, config.region.lowerLeft.x * scale, 
+              config.region.lowerLeft.y * scale, 100, 50);
         scheduleNextDemand(state, eventQueue);
-        scheduleNextAnimationFrame(state, eventQueue);
+        //img.onload = function(){
+        //
+        scheduleNextAnimationFrame(state, eventQueue, scale, img, ctx);
+        //};
         //state.servers.push(new Server(config.region.median(), FCFSPolicy));
         //state.servers.push(new Server(config.region.median(), ReturnToMedianPolicy));
         state.servers.push(new Server(config.region.median(), new ReturnPartwayToMedianPolicy(0.5)));
@@ -333,6 +359,7 @@
         }
         console.log("Average wait time of serviced demands", stats.waitTimeOfServiced / stats.numServiced);
         console.log("Average distance traveled per serviced demand", stats.distanceTraveled / stats.numDemands);
+    };
     }
-    run();
+    window.onload = run
 })();
