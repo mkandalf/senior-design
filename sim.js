@@ -256,13 +256,15 @@ var imageCollector = function(expectedCount, completeFn){
             if (!this.arrivalEvent) {
               return;
             }
+            var oldX = this.x;
+            var oldY = this.y;
             var start = this.arrivalEvent.metadata.start;
             var destination = this.arrivalEvent.metadata.destination;
             var interp = (state.time - this.arrivalEvent.scheduledAt) /
                          (this.arrivalEvent.time - this.arrivalEvent.scheduledAt);
             this.x = start.x + (destination.x - start.x) * interp;
             this.y = start.y + (destination.y - start.y) * interp;
-            stats.distanceTraveled += Math.sqrt((start.x - this.x) * (start.x - this.x) + (start.y - this.y) * (start.y - this.y));
+            stats.distanceTraveled += Math.sqrt((oldX - this.x) * (oldX - this.x) + (oldY - this.y) * (oldY - this.y));
         },
         goToDemand: function(state, queue, demand){
             var self = this;
@@ -390,7 +392,7 @@ var imageCollector = function(expectedCount, completeFn){
             lambda: 2.2 * 4,
             v: .7,
             region: new Square(0.5, {x: 0, y: 0}),
-            simulationSpeed: 0.1,
+            simulationSpeed: 0.2,
             fps: 30,
             r: 0.5
         };
