@@ -338,7 +338,7 @@ var imageCollector = function(expectedCount, completeFn){
     };
 
     var scheduleNextDemand = function(state, queue){
-        var interarrivalTime = exp(config.lambda);
+        var interarrivalTime = exp(config.lambda * config.n);
         var demandNum = stats.numDemands;
         stats.numDemands += 1;
         queue.schedule(interarrivalTime, function(state, queue, cb){
@@ -389,7 +389,7 @@ var imageCollector = function(expectedCount, completeFn){
 
     function run(){
         config = {
-            lambda: 2.2 * 4,
+            lambda: 2.2,
             v: .7,
             region: new Square(0.5, {x: 0, y: 0}),
             simulationSpeed: .2,
@@ -450,7 +450,7 @@ var imageCollector = function(expectedCount, completeFn){
           var runNext = function() {
               config.simulationSpeed = document.getElementById('slider1').value;
               config.r = document.getElementById('slider2').value;
-              config.lambda = document.getElementById('slider3').value * config.n;
+              config.lambda = document.getElementById('slider3').value;
               var nextEvent = eventQueue.dequeue();
               state.time = nextEvent.time;
               if (nextEvent.type != 'frame') {
