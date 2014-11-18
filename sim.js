@@ -196,6 +196,9 @@ function sleep(milliseconds) {
             this.policy.maybeTakeAction(state, queue);
         },
         updateCurrentLocation: function(state){
+            if (!this.arrivalEvent) {
+              return;
+            }
             var start = this.arrivalEvent.metadata.start;
             var destination = this.arrivalEvent.metadata.destination;
             var interp = (state.time - this.arrivalEvent.scheduledAt) /
@@ -227,11 +230,12 @@ function sleep(milliseconds) {
                     _metadata[attrname] = metadata[attrname];
                 }
             }
-            this.arrivalEvent = queue.schedule(travelTime, function(state, queue){
+            this.arrivalEvent = queue.schedule(travelTime, function(state, queue, _cb){
                 self.state = IDLE;
                 self.updateCurrentLocation(state);
                 self.arrivalEvent = null;
                 cb(state, queue);
+                _cb();
             }, 'arrival', _metadata);
         }
     };
@@ -279,9 +283,10 @@ function sleep(milliseconds) {
         var interarrivalTime = exp(config.lambda);
         var demandNum = stats.numDemands;
         stats.numDemands += 1;
-        queue.schedule(interarrivalTime, function(state, queue){
+        queue.schedule(interarrivalTime, function(state, queue, cb){
             addDemand(state, queue, demandNum);
             scheduleNextDemand(state, queue);
+            cb();
         }, 'demand', {demandNum: demandNum, str: 'Demand appeared num ' + demandNum});
     };
 
@@ -290,23 +295,23 @@ function sleep(milliseconds) {
         var ctx = ctx;
         var delay = config.simulationSpeed / config.fps;
         var img = img;
-        console.log('got here');
-        queue.schedule(delay, function(state, queue){
-            ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height)
+        queue.schedule(delay, function(state, queue, cb){
+            state.servers[0].updateCurrentLocation(state, queue);
+            ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
             ctx.drawImage(img, state.servers[0].x * scale, 
               state.servers[0].y * scale, 100, 50);
-            sleep(500);
             scheduleNextAnimationFrame(state, queue, scale, img, ctx);
+            requestAnimationFrame(cb);
         }, 'frame');
         
     };
 
     function run(){
         config = {
-            lambda: 0.1,
+            lambda: .8,
             v: 1,
             region: new Circle(0.5, {x: 0, y: 0}),
-            simulationSpeed: 1,
+            simulationSpeed: .1,
             fps: 30
         };
 
@@ -348,15 +353,18 @@ function sleep(milliseconds) {
         state.servers.push(new Server(config.region.median(), new ReturnPartwayToMedianPolicy(0.5)));
 
         var count = 0;
-        while (eventQueue.length && count < 100) {
+        var runNext = function() {
             var nextEvent = eventQueue.dequeue();
             state.time = nextEvent.time;
             if (nextEvent.type != 'frame') {
                 count += 1;
                 console.log('(' + Math.floor(state.time * 100) / 100 + 's)', nextEvent.metadata.str);
             }
-            nextEvent.execute(state, eventQueue);
+            nextEvent.execute(state, eventQueue, runNext);
         }
+        runNext();
+        //while (eventQueue.length && count < 100) {
+        //}
         console.log("Average wait time of serviced demands", stats.waitTimeOfServiced / stats.numServiced);
         console.log("Average distance traveled per serviced demand", stats.distanceTraveled / stats.numDemands);
     };
