@@ -304,20 +304,29 @@ var imageCollector = function(expectedCount, completeFn){
         }, 'demand', {demandNum: demandNum, str: 'Demand appeared num ' + demandNum});
     };
 
-    var scheduleNextAnimationFrame = function(state, queue, scale, img, ctx, demand_img){
+    var scheduleNextAnimationFrame = function(state, queue, scale, img, ctx, demand_list, demand_dict){
         var delay = config.simulationSpeed / config.fps;
         queue.schedule(delay, function(state, queue, cb){
             state.servers[0].updateCurrentLocation(state, queue);
             ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
             var demand_count = state['demands'].length
             for (var i=0; i < demand_count; i++) {
-              ctx.drawImage(demand_img, state.demands[i].x * scale,
-                state.demands[i].y * scale, 100,100);
+              var coords = (state.demands[i].x * scale) + "," + (state.demands[i].y * scale);
+              if (typeof(demand_dict[coords]) !== 'undefined') {
+                ctx.drawImage(demand_dict[coords], (state.demands[i].x * scale) - (demand_dict[coords].width/2),
+                  (state.demands[i].y * scale) - (demand_dict[coords].height/2), 100,100);
+              }
+              else {
+                var random = demand_list[Math.floor(Math.random() * demand_list.length)]
+                demand_dict[coords] = random;
+                ctx.drawImage(random, (state.demands[i].x * scale) - (random.width/2),
+                  (state.demands[i].y * scale) - (random.height/2), 100,100);
+              }
             }
             config.region.draw(ctx, scale);
-            ctx.drawImage(img, state.servers[0].x * scale, 
-              state.servers[0].y * scale, 100, 50);
-            scheduleNextAnimationFrame(state, queue, scale, img, ctx, demand_img);
+            ctx.drawImage(img, (state.servers[0].x * scale) - (img.width/2),
+              (state.servers[0].y * scale) - (img.height/2), 100, 50);
+            scheduleNextAnimationFrame(state, queue, scale, img, ctx, demand_list, demand_dict);
             requestAnimationFrame(cb);
         }, 'frame');
         
@@ -357,16 +366,20 @@ var imageCollector = function(expectedCount, completeFn){
         var ctx = canvas.getContext('2d');
         var img = new Image();
         img.src = 'drone.png'
-        var demand_img = new Image();
-        demand_img.src = 'fire.jpg'
-        img.onload = function() {
-          demand_img.onload = function() {
+        var demand_srcs = ['sick.png', 'fire.png', 'theft.png'];
+        var demand_list = [];
+        for (var i=0; i < demand_srcs.length; i++) {
+          var demand_img = new Image();
+          demand_img.src = demand_srcs[i];
+          demand_list.push(demand_img);
+        }
+          // var ic = imageCollector(2, function(){
             ctx.drawImage(img, config.region.lowerLeft.x * scale, 
                 config.region.lowerLeft.y * scale, 100, 50);
           scheduleNextDemand(state, eventQueue);
           //img.onload = function(){
           //
-          scheduleNextAnimationFrame(state, eventQueue, scale, img, ctx, demand_img);
+          scheduleNextAnimationFrame(state, eventQueue, scale, img, ctx, demand_list, {});
           //};
           //state.servers.push(new Server(config.region.median(), FCFSPolicy));
           //state.servers.push(new Server(config.region.median(), ReturnToMedianPolicy));
@@ -387,8 +400,7 @@ var imageCollector = function(expectedCount, completeFn){
           //}
           console.log("Average wait time of serviced demands", stats.waitTimeOfServiced / stats.numServiced);
           console.log("Average distance traveled per serviced demand", stats.distanceTraveled / stats.numDemands);
-      };
-    };
+    //   });
     // img.onload = ic;
     // demand_img.onload = ic;
     }
