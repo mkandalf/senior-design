@@ -368,6 +368,15 @@ var imageCollector = function(expectedCount, completeFn){
             }
             for (var i = 0; i < state.servers.length; i++) {
               state.servers[i].updateCurrentLocation(state, queue);
+              if (state.servers[i].arrivalEvent){
+                ctx.lineWidth = 2;
+                //ctx.strokeStyle = "#4440ff";
+                ctx.beginPath();
+                ctx.moveTo(state.servers[i].x * scale,state.servers[i].y * scale);
+                ctx.lineTo(state.servers[i].arrivalEvent.metadata.start.x * scale,state.servers[i].arrivalEvent.metadata.start.y * scale);
+                //ctx.lineTo(state.servers[i].arrivalEvent.metadata.destination.x * scale,state.servers[i].arrivalEvent.metadata.destination.y * scale);
+                ctx.stroke();
+              }
               ctx.drawImage(img, state.servers[i].x * scale - (75 / 2), state.servers[i].y * scale - (75 / 2), 75, 75);
             }
             scheduleNextAnimationFrame(state, queue, scale, img, ctx, demand_list, demand_dict, canvas);
