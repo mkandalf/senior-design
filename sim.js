@@ -228,8 +228,8 @@ var imageCollector = function(expectedCount, completeFn){
                     } else if ((this.x !== this.median.x || this.y !== this.median.y) && this.mustReposition) {
                         this.state = REPOSITIONING;
                         var destination = {
-                            x: this.x + alpha * (this.median.x - this.x),
-                            y: this.y + alpha * (this.median.y - this.y)
+                            x: this.x + config.r * (this.median.x - this.x),
+                            y: this.y + config.r * (this.median.y - this.y)
                         };
                         this.goToLocation(state, queue, destination, function(state, queue) {
                             this.mustReposition = false;
@@ -392,7 +392,7 @@ var imageCollector = function(expectedCount, completeFn){
             lambda: 2.2 * 4,
             v: .7,
             region: new Square(0.5, {x: 0, y: 0}),
-            simulationSpeed: 0.2,
+            simulationSpeed: .2,
             fps: 30,
             r: 0.5
         };
@@ -447,6 +447,8 @@ var imageCollector = function(expectedCount, completeFn){
 
           var count = 0;
           var runNext = function() {
+              config.simulationSpeed = document.getElementById('slider1').value;
+              config.r = document.getElementById('slider2').value;
               var nextEvent = eventQueue.dequeue();
               state.time = nextEvent.time;
               if (nextEvent.type != 'frame') {
