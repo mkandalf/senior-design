@@ -5,12 +5,33 @@
   <style>
     body { 
       background-image: url('background.jpg');
-      width: 300px;
-      height: 300px;
+    }
+    #stats {
+      display: inline-block;
+      background-color: white;
+      opacity: 0.6;
+      width: 700px;
+      height: 200px;
+      vertical-align:top;
+    }
+    h1 {
+      margin-left: 40px;
+    }
+
+    canvas {
+      display: inline-block;
+      margin-right: 50px;
     }
   </style>
 </head>
 <body>
-  <canvas id="canvas" width="700" height="700"></canvas>
+  <div class="work">
+    <canvas id="canvas" width="700" height="700"></canvas>
+    <div id="stats">
+      <h1>Statistics</h1>
+      <h2 id="time"></h2>
+      <h2 id="distance"></h2>
+    </div>
+  </div>
 </body>
 </html>

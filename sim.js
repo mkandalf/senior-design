@@ -140,7 +140,7 @@ var imageCollector = function(expectedCount, completeFn){
         this.partition = config.region.split(n);
         this.servers = [];
         for (var i = 0; i < n; i+=1) {
-            this.servers.push(new Server(this.partition[i].median, new ReturnPartwayToMedianPolicy(0.5), this.partition[i].median));
+            this.servers.push(new Server(this.partition[i].median, new ReturnPartwayToMedianPolicy(config.r), this.partition[i].median));
         }
     };
     PartitionStrategy.prototype = {
@@ -381,8 +381,9 @@ var imageCollector = function(expectedCount, completeFn){
             lambda: 2.2 * 4,
             v: .7,
             region: new Square(0.5, {x: 0, y: 0}),
-            simulationSpeed: .1,
-            fps: 30
+            simulationSpeed: 0.1,
+            fps: 30,
+            r: 0.5
         };
 
         var state = {
@@ -440,6 +441,10 @@ var imageCollector = function(expectedCount, completeFn){
               if (nextEvent.type != 'frame') {
                   count += 1;
                   console.log('(' + Math.floor(state.time * 100) / 100 + 's)', nextEvent.metadata.str);
+              document.getElementById("time").innerHTML = "Average wait time of serviced demands: " + Math.floor(stats.waitTimeOfServiced / stats.numServiced * 100) / 100;
+              document.getElementById("distance").innerHTML = "Average distance traveled per serviced demand: " + Math.floor(stats.distanceTraveled / stats.numDemands * 100)/  100;
+
+
               }
               nextEvent.execute(state, eventQueue, runNext);
           }
