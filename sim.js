@@ -91,7 +91,7 @@ var imageCollector = function(expectedCount, completeFn){
     Circle.prototype.constructor = Circle;
     Circle.prototype.uniformPoint = function() {
         while (true) {
-            var test = {x: Math.random(0,this.radius * 2) + this.lowerLeft.x, y: Math.random(0,this.radius * 2) + this.lowerLeft.y};
+            var test = {x: Math.random() * this.radius * 2 + this.lowerLeft.x, y: Math.random() * this.radius * 2 + this.lowerLeft.y};
             if (this.contains(test)) {
                 return test;
             }
