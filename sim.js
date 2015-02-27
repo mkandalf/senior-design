@@ -1,12 +1,12 @@
-var imageCollector = function(expectedCount, completeFn){
-  var receivedCount = 0;
-  return function(){
-    if(++receivedCount == expectedCount){
-      completeFn();
-    } else {
-      console.log(receivedCount);
-    }
-  };
+var imageCollector = function(expectedCount, completeFn) {
+    var receivedCount = 0;
+    return function() {
+        if (++receivedCount === expectedCount) {
+            completeFn();
+        } else {
+            console.log(receivedCount);
+        }
+    };
 }();
 
 
