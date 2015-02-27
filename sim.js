@@ -37,6 +37,9 @@ var imageCollector = function(expectedCount, completeFn) {
         },
         contains: function(p) {
             throw "Abstract method";
+        },
+        distanceToMedian: function(p) {
+            return Math.sqrt(Math.pow(this.median.x - p.x, 2) + Math.pow(this.median.y - p.y, 2));
         }
     };
 
@@ -119,6 +122,20 @@ var imageCollector = function(expectedCount, completeFn) {
           ctx.stroke();
     };
 
+    function ArbitraryRegion(p) {
+        this.median = {x: p.x, y: p.y};
+    }
+    ArbitraryRegion.prototype = Object.create(Region.prototype);
+    ArbitraryRegion.prototype.constructor = ArbitraryRegion;
+    ArbitraryRegion.prototype.uniformPoint = function() {
+    };
+    ArbitraryRegion.prototype.split = function(n) {
+    };
+    ArbitraryRegion.prototype.contains = function(p) {
+    };
+    ArbitraryRegion.prototype.draw = function(ctx, scale) {
+    };
+
     var IDLE = 0;
     var TRANSIT = 1;
     var REPOSITIONING = 3;
@@ -132,7 +149,7 @@ var imageCollector = function(expectedCount, completeFn) {
         this.policy.onNewDemand = this.policy.onNewDemand.bind(this);
         this.policy.init();
         this.demands = [];
-        this.state = 0; // 0: idle, 1: transit, 2: service, 3: repositioning
+        this.state = IDLE; // 0: idle, 1: transit, 2: service, 3: repositioning
         this.arrivalEvent = null;
     };
 
@@ -145,12 +162,16 @@ var imageCollector = function(expectedCount, completeFn) {
     };
     PartitionStrategy.prototype = {
         onNewDemand: function(state, queue, demand) {
-            var that = this;
+            var min, minIndex;
             this.partitions.forEach(function(partition, i) {
-                if (partition.contains({x: demand.x, y: demand.y})) {
-                    that.servers[i].onNewDemand(state, queue, demand);
+                var d = partition.distanceToMedian({x: demand.x, y: demand.y});
+                console.log(d);
+                if (!min || d < min) {
+                    min = d;
+                    minIndex = i;
                 }
             });
+            this.servers[minIndex].onNewDemand(state, queue, demand);
         },
         getServers: function() {
             return this.servers;
