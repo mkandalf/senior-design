@@ -52,7 +52,7 @@ var imageCollector = function(expectedCount, completeFn) {
         return {x: Math.random() * this.size + this.lowerLeft.x, y: Math.random() * this.size + this.lowerLeft.y};
     };
     Square.prototype.split = function(n) {
-        if (Math.sqrt(n)*Math.sqrt(n) !== n) {
+        if (Math.sqrt(n) * Math.sqrt(n) !== n) {
             throw "Cannot split square into a non-square number of regions";
         }
         var root = Math.sqrt(n);
@@ -137,27 +137,28 @@ var imageCollector = function(expectedCount, completeFn) {
     };
 
     var PartitionStrategy = function(n) {
-        this.partition = config.region.split(n);
-        this.servers = [];
-        for (var i = 0; i < n; i+=1) {
-            this.servers.push(new Server(this.partition[i].median, new ReturnPartwayToMedianPolicy(config.r), this.partition[i].median));
-        }
+        this.partitions = config.region.split(n);
+        var that = this;
+        this.servers = this.partitions.map(function(partition) {
+            return new Server(partition.median, new ReturnPartwayToMedianPolicy(config.r), partition.median);
+        });
     };
     PartitionStrategy.prototype = {
         onNewDemand: function(state, queue, demand) {
-            for (var i = 0; i < this.partition.length; i++) {
-                if (this.partition[i].contains({x: demand.x, y: demand.y})) {
-                    this.servers[i].onNewDemand(state, queue, demand);
+            var that = this;
+            this.partitions.forEach(function(partition, i) {
+                if (partition.contains({x: demand.x, y: demand.y})) {
+                    that.servers[i].onNewDemand(state, queue, demand);
                 }
-            }
+            });
         },
         getServers: function() {
             return this.servers;
         },
         draw: function(ctx, scale) {
-          for (var i = 0; i < this.partition.length; i++) {
-            this.partition[i].draw(ctx, scale);
-          }
+            this.partitions.forEach(function(partition) {
+                partition.draw(ctx, scale);
+            });
         }
     };
 
