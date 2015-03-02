@@ -9,6 +9,124 @@ var imageCollector = function(expectedCount, completeFn) {
     };
 }();
 
+distances = {
+  euclidean: function(v1, v2) {
+      var total = 0;
+      for (var i = 0; i < v1.length; i++) {
+         total += Math.pow(v2[i] - v1[i], 2);      
+      }
+      return Math.sqrt(total);
+   },
+   manhattan: function(v1, v2) {
+     var total = 0;
+     for (var i = 0; i < v1.length ; i++) {
+        total += Math.abs(v2[i] - v1[i]);      
+     }
+     return total;
+   },
+   max: function(v1, v2) {
+     var max = 0;
+     for (var i = 0; i < v1.length; i++) {
+        max = Math.max(max , Math.abs(v2[i] - v1[i]));      
+     }
+     return max;
+   }
+};
+
+function KMeans(centroids) {
+   this.centroids = centroids || [];
+};
+
+KMeans.prototype.randomCentroids = function(points, k) {
+   var centroids = points.slice(0); // copy
+   centroids.sort(function() {
+      return (Math.round(Math.random()) - 0.5);
+   });
+   return centroids.slice(0, k);
+};
+
+KMeans.prototype.classify = function(point, distance) {
+   var min = Infinity,
+       index = 0;
+
+   distance = distance || "euclidean";
+   if (typeof distance == "string") {
+      distance = distances[distance];
+   }
+
+   for (var i = 0; i < this.centroids.length; i++) {
+      var dist = distance(point, this.centroids[i]);
+      if (dist < min) {
+         min = dist;
+         index = i;
+      }
+   }
+
+   return index;
+};
+
+KMeans.prototype.cluster = function(points, k, distance, snapshotPeriod, snapshotCb) {
+   k = k || Math.max(2, Math.ceil(Math.sqrt(points.length / 2)));
+
+   distance = distance || "euclidean";
+   if (typeof distance == "string") {
+      distance = distances[distance];
+   }
+
+   this.centroids = this.centroids || this.randomCentroids(points, k);
+
+   var assignment = new Array(points.length);
+   var clusters = new Array(k);
+
+   var iterations = 0;
+   var movement = true;
+   while (movement) {
+      // update point-to-centroid assignments
+      for (var i = 0; i < points.length; i++) {
+         assignment[i] = this.classify(points[i], distance);
+      }
+
+      // update location of each centroid
+      movement = false;
+      for (var j = 0; j < k; j++) {
+         var assigned = [];
+         for (var i = 0; i < assignment.length; i++) {
+            if (assignment[i] == j) {
+               assigned.push(points[i]);
+            }
+         }
+
+         if (!assigned.length) {
+            continue;
+         }
+
+         var centroid = this.centroids[j];
+         var newCentroid = new Array(centroid.length);
+
+         for (var g = 0; g < centroid.length; g++) {
+            var sum = 0;
+            for (var i = 0; i < assigned.length; i++) {
+               sum += assigned[i][g];
+            }
+            newCentroid[g] = sum / assigned.length;
+
+            if (newCentroid[g] != centroid[g]) {
+               movement = true;
+            }
+         }
+
+         this.centroids[j] = newCentroid;
+         clusters[j] = assigned;
+      }
+
+      if (snapshotCb && (iterations++ % snapshotPeriod == 0)) {
+         snapshotCb(clusters);
+      }
+   }
+
+   return clusters;
+};
+
 
 (function(){
     "use strict";
@@ -82,7 +200,7 @@ var imageCollector = function(expectedCount, completeFn) {
         ctx.lineWidth = 3;
         //ctx.strokeStyle = "#003300";
         ctx.stroke();
-    }
+    };
 
     function Circle(radius, lowerLeft) {
         this.radius = radius;
@@ -136,6 +254,40 @@ var imageCollector = function(expectedCount, completeFn) {
     ArbitraryRegion.prototype.draw = function(ctx, scale) {
     };
 
+    function Line(length, lowerLeft) {
+        this.length = length;
+        this.lowerLeft = lowerLeft;
+        this.upperRight = {x: length + lowerLeft.x, y: lowerLeft.y};
+        this.median = {x: this.length / 2 + this.lowerLeft.x, y: this.lowerLeft.y};
+    }
+    Line.prototype = Object.create(Region.prototype);
+    Line.prototype.constructor = Line;
+    Line.prototype.uniformPoint = function() {
+          return {x: Math.random() * this.length + this.lowerLeft.x, y: this.lowerLeft.y};
+    };
+    Line.prototype.split = function(n) {
+        var ret = [];
+        for (var i = 0; i < n; i+=1) {
+              ret.push(new Line(this.length/n, {x:this.lowerLeft.x + this.length * i / n, y:this.lowerLeft.y}));
+        }
+        return ret;
+    };
+    Line.prototype.contains = function(p) {
+        return (p.y == this.lowerLeft.y && this.lowerLeft.x <= p.x && this.lowerLeft.x + this.length >= p.x);
+    };
+    Line.prototype.draw = function(ctx, scale) {
+        ctx.lineWidth = 5;
+        ctx.strokeStyle = "#000000";
+        ctx.strokeRect(this.lowerLeft.x * scale, this.lowerLeft.y * scale, this.length * scale, 0);
+        ctx.beginPath();
+        ctx.arc(scale * this.median.x - 2, scale * this.median.y - 2, 4, 0, 2 * Math.PI, false);
+        //ctx.fillStyle = 'green';
+        ctx.fill();
+        ctx.lineWidth = 3;
+        //ctx.strokeStyle = "#003300";
+        ctx.stroke();
+    };
+
     var IDLE = 0;
     var TRANSIT = 1;
     var REPOSITIONING = 3;
@@ -151,6 +303,50 @@ var imageCollector = function(expectedCount, completeFn) {
         this.demands = [];
         this.state = IDLE; // 0: idle, 1: transit, 2: service, 3: repositioning
         this.arrivalEvent = null;
+    };
+
+    var LearningStrategy = function(n) {
+        this.n = n;
+        this.partition = config.region.split(n);
+        this.medians = [];
+        for (var i = 0; i < this.partition.length; i++){
+            this.medians.push([this.partition[i].median.x, this.partition[i].median.y]);
+        }
+        this.demandsSeen = [];
+        this.servers = [];
+        for (var i = 0; i < n; i+=1) {
+            this.servers.push(new Server(this.partition[i].median, new ReturnPartwayToMedianPolicy(config.r), this.partition[i].median));
+        }
+    };
+    LearningStrategy.prototype = {
+        onNewDemand: function(state, queue, demand) {
+            this.demandsSeen.push([demand.x, demand.y]);
+            var k = new KMeans(this.medians);
+            var clusters = k.cluster(this.demandsSeen, this.n);
+            this.medians = k.centroids;
+            for (var i = 0; i < this.partition.length; i++) {
+                if (this.partition[i].contains({x: demand.x, y: demand.y})) {
+                    this.servers[i].onNewDemand(state, queue, demand);
+                }
+            }
+        },
+        getServers: function() {
+            return this.servers;
+        },
+        draw: function(ctx, scale) {
+          for (var i = 0; i < this.partition.length; i++) {
+            //this.partition[i].draw(ctx, scale);
+            ctx.lineWidth = 5;
+            ctx.strokeStyle = "#000000";
+            ctx.beginPath();
+            ctx.arc(scale * this.medians[i][0] - 2, scale * this.medians[i][1] - 2, 4, 0, 2 * Math.PI, false);
+            //ctx.fillStyle = 'green';
+            ctx.fill();
+            ctx.lineWidth = 3;
+            //ctx.strokeStyle = "#003300";
+            ctx.stroke();
+          }
+        }
     };
 
     var PartitionStrategy = function(n) {
@@ -375,7 +571,7 @@ var imageCollector = function(expectedCount, completeFn) {
         queue.schedule(delay, function(state, queue, cb){
             ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
             var demand_count = state['demands'].length;
-            //config.strategy.draw(ctx, scale);
+            config.strategy.draw(ctx, scale);
             config.region.draw(ctx, scale);
             for (var i=0; i < demand_count; i++) {
               var coords = (state.demands[i].x * scale) + "," + (state.demands[i].y * scale);
@@ -412,10 +608,10 @@ var imageCollector = function(expectedCount, completeFn) {
     function run(){
         config = {
             lambda: 2.2,
-            v: .7,
-            region: new Square(0.5, {x: 0, y: 0}),
+            v: 1,
+            region: new Square(1, {x: 0, y: 0}),
             simulationSpeed: .2,
-            fps: 30,
+            fps: 1,
             r: 0.5,
             n: 4
         };
@@ -441,7 +637,7 @@ var imageCollector = function(expectedCount, completeFn) {
             return data;
         };
 
-        config.strategy = new PartitionStrategy(config.n);
+        config.strategy = new LearningStrategy(config.n);
         state.servers = config.strategy.getServers();
 
         var canvas = document.getElementById('canvas');
@@ -475,8 +671,8 @@ var imageCollector = function(expectedCount, completeFn) {
               config.lambda = document.getElementById('slider3').value;
               var nextEvent = eventQueue.dequeue();
               state.time = nextEvent.time;
+              count += 1;
               if (nextEvent.type != 'frame') {
-                  count += 1;
                   console.log('(' + Math.floor(state.time * 100) / 100 + 's)', nextEvent.metadata.str);
               document.getElementById("time").innerHTML = "Average wait time of serviced demands: " + Math.floor(stats.waitTimeOfServiced / stats.numServiced * 100) / 100;
               document.getElementById("distance").innerHTML = "Average distance traveled per serviced demand: " + Math.floor(stats.distanceTraveled / stats.numDemands * 100)/  100;
