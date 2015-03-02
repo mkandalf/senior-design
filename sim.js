@@ -9,6 +9,18 @@ var imageCollector = function(expectedCount, completeFn) {
     };
 }();
 
+function Point(x, y){
+  this._x = x;
+  this._y = y;
+};
+
+Point.prototype.lat = function() {
+  return this._x;
+};
+Point.prototype.lng = function() {
+  return this._y;
+};
+
 distances = {
   euclidean: function(v1, v2) {
       var total = 0;
@@ -174,6 +186,9 @@ KMeans.prototype.cluster = function(points, k, distance, snapshotPeriod, snapsho
     Square.prototype.uniformPoint = function() {
         return {x: Math.random() * this.size + this.lowerLeft.x, y: Math.random() * this.size + this.lowerLeft.y};
     };
+    Square.prototype.betaPoint = function(alpha, beta) {
+        return {x: rbeta(alpha, beta) * this.size + this.lowerLeft.x, y: rbeta(alpha, beta) * this.size + this.lowerLeft.y};
+    }
     Square.prototype.split = function(n) {
         if (Math.sqrt(n) * Math.sqrt(n) !== n) {
             throw "Cannot split square into a non-square number of regions";
@@ -309,44 +324,130 @@ KMeans.prototype.cluster = function(points, k, distance, snapshotPeriod, snapsho
 
     var LearningStrategy = function(n) {
         this.n = n;
-        this.partition = config.region.split(n);
+        this.partitions = config.region.split(n);
         this.medians = [];
-        for (var i = 0; i < this.partition.length; i++){
-            this.medians.push([this.partition[i].median.x, this.partition[i].median.y]);
+        for (var i = 0; i < this.partitions.length; i++){
+            this.medians.push([this.partitions[i].median.x, this.partitions[i].median.y]);
         }
+        this.mediansChanged = true;
         this.demandsSeen = [];
         this.servers = [];
         for (var i = 0; i < n; i+=1) {
-            this.servers.push(new Server(this.partition[i].median, new ReturnPartwayToMedianPolicy(config.r), this.partition[i].median));
+            this.servers.push(new Server(this.partitions[i].median, new ReturnPartwayToMedianPolicy(config.r), this.partitions[i].median));
         }
+        this.numUnchanged = 0;
+        this.computeMedians();
     };
     LearningStrategy.prototype = {
+        computeMedians: function() {
+            if (this.numUnchanged <= 4000) {
+              this.mediansChanged = true;
+              var k = new KMeans(this.medians);
+              var clusters = k.cluster(this.demandsSeen, this.n);
+              this.clusters = clusters;
+              this.medians = k.centroids;
+              var availablePartitions = _.clone(this.partitions);
+              var amountChanged = 0;
+              var self = this;
+              this.medians.forEach(function(median, i){
+                var min, minIndex;
+                availablePartitions.forEach(function(partition, idx){
+                  var d = partition.distanceToMedian({x: median[0], y:median[1]});
+                  if (min === undefined || d < min) {
+                    min = d;
+                    minIndex = idx;
+                  }
+                });
+                amountChanged += min;
+                availablePartitions[minIndex].median = {x: median[0], y: median[1]};
+                availablePartitions.splice(minIndex, 1);
+              });
+              this.partitions.forEach(function(partition, idx){
+                self.servers[idx].median = partition.median;
+              });
+              if (amountChanged <= 0.0005) {
+                this.numUnchanged += 1;
+              } else {
+                this.numUnchanged = 0;
+              }
+            }
+        },
         onNewDemand: function(state, queue, demand) {
             this.demandsSeen.push([demand.x, demand.y]);
-            var k = new KMeans(this.medians);
-            var clusters = k.cluster(this.demandsSeen, this.n);
-            this.medians = k.centroids;
-            for (var i = 0; i < this.partition.length; i++) {
-                if (this.partition[i].contains({x: demand.x, y: demand.y})) {
-                    this.servers[i].onNewDemand(state, queue, demand);
+            this.computeMedians();
+            var min, minIndex;
+            this.partitions.forEach(function(partition, i) {
+                var d = partition.distanceToMedian({x: demand.x, y: demand.y});
+                if (min === undefined || d < min) {
+                    min = d;
+                    minIndex = i;
                 }
-            }
+            });
+            this.servers[minIndex].onNewDemand(state, queue, demand);
         },
         getServers: function() {
             return this.servers;
         },
         draw: function(ctx, scale) {
-          for (var i = 0; i < this.partition.length; i++) {
+          var bbox = {
+              xl: 0, xr: config.region.upperRight.x,
+              yt: 0, yb: config.region.upperRight.y
+          };
+          if (this.mediansChanged) {
+            var medians = this.medians.map(function(m) {
+                return {x: m[0], y: bbox.yb - m[1]};
+            });
+            if (this.diagram) {
+                voronoi.recycle(this.diagram);
+            }
+            this.diagram = voronoi.compute(medians, bbox);
+            this.mediansChanged = false;
+          }
+          ctx.globalAlpha = 1;
+          ctx.beginPath();
+          ctx.strokeStyle = '#000';
+          // edges
+          this.diagram.edges.forEach(function(edge) {
+              var v = edge.va;
+              ctx.moveTo(scale*v.x, scale*(bbox.yb - v.y));
+              v = edge.vb;
+              ctx.lineTo(scale*v.x, scale*(bbox.yb - v.y));
+          });
+          ctx.stroke();
+          ctx.globalAlpha = 1;
+          ctx.beginPath();
+          ctx.strokeStyle = '#22c';
+          _.each(this.clusters, function(cluster) {
+            var convexHull = new ConvexHullGrahamScan();
+            if (cluster) {
+              _.each(cluster, function(p) {
+                convexHull.addPoint(p[0], p[1]);
+              });
+              //var points = _.map(cluster, function(p) {
+                //return new Point(p[0], p[1]);
+              //});
+              //var hullPoints = [];
+              //var hullPoints_size = chainHull_2D(points, points.length, hullPoints);
+              var hullPoints = convexHull.getHull();
+              for (var i = 0; i < hullPoints.length; i++) {
+                ctx.moveTo(scale*hullPoints[i].x, scale*hullPoints[i].y);
+                ctx.lineTo(scale*hullPoints[(i+1) % hullPoints.length].x, scale*hullPoints[(i+1) % hullPoints.length].y);
+              }
+            }
+          });
+          ctx.stroke();
+          for (var i = 0; i < this.partitions.length; i++) {
             //this.partition[i].draw(ctx, scale);
             ctx.lineWidth = 5;
-            ctx.strokeStyle = "#000000";
+            ctx.strokeStyle = "#f00";
             ctx.beginPath();
             ctx.arc(scale * this.medians[i][0] - 2, scale * this.medians[i][1] - 2, 4, 0, 2 * Math.PI, false);
-            //ctx.fillStyle = 'green';
+            ctx.fillStyle = '#f00';
             ctx.fill();
             ctx.lineWidth = 3;
             //ctx.strokeStyle = "#003300";
             ctx.stroke();
+
           }
         }
     };
@@ -571,7 +672,7 @@ KMeans.prototype.cluster = function(points, k, distance, snapshotPeriod, snapsho
 
     var genDemand = function(state, demandNum) {
         // Can change this to do a circle...
-        return new Demand(config.region.uniformPoint(), state.time, demandNum);
+        return new Demand(config.region.betaPoint(6, 6), state.time, demandNum);
     };
 
     var addDemand = function(state, queue, demandNum) {
@@ -597,7 +698,6 @@ KMeans.prototype.cluster = function(points, k, distance, snapshotPeriod, snapsho
         queue.schedule(delay, function(state, queue, cb){
             ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
             var demand_count = state['demands'].length;
-            config.strategy.draw(ctx, scale);
             // config.region.draw(ctx, scale);
             for (var i=0; i < demand_count; i++) {
               var coords = (state.demands[i].x * scale) + "," + (state.demands[i].y * scale);
@@ -625,6 +725,7 @@ KMeans.prototype.cluster = function(points, k, distance, snapshotPeriod, snapsho
               }
               ctx.drawImage(img, state.servers[i].x * scale - (75 / 2), state.servers[i].y * scale - (75 / 2), 75, 75);
             }
+            config.strategy.draw(ctx, scale);
             scheduleNextAnimationFrame(state, queue, scale, img, ctx, demand_list, demand_dict, canvas);
             requestAnimationFrame(cb);
         }, 'frame');
@@ -637,9 +738,9 @@ KMeans.prototype.cluster = function(points, k, distance, snapshotPeriod, snapsho
             v: 1,
             region: new Square(1, {x: 0, y: 0}),
             simulationSpeed: .2,
-            fps: 1,
+            fps: 30,
             r: 0.5,
-            n: 4
+            n: 16
         };
 
         var state = {
