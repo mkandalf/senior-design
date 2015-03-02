@@ -22,6 +22,8 @@ var imageCollector = function(expectedCount, completeFn) {
         waitTimeOfServiced: 0
     };
 
+    var voronoi = new Voronoi();
+
     function Region() {
         if (this.constructor === Region) {
             throw "Can't instantiate abstract class";
@@ -155,17 +157,16 @@ var imageCollector = function(expectedCount, completeFn) {
 
     var PartitionStrategy = function(n) {
         this.partitions = config.region.split(n);
-        var that = this;
         this.servers = this.partitions.map(function(partition) {
             return new Server(partition.median, new ReturnPartwayToMedianPolicy(config.r), partition.median);
         });
+        this.diagram = undefined;
     };
     PartitionStrategy.prototype = {
         onNewDemand: function(state, queue, demand) {
             var min, minIndex;
             this.partitions.forEach(function(partition, i) {
                 var d = partition.distanceToMedian({x: demand.x, y: demand.y});
-                console.log(d);
                 if (!min || d < min) {
                     min = d;
                     minIndex = i;
@@ -177,9 +178,34 @@ var imageCollector = function(expectedCount, completeFn) {
             return this.servers;
         },
         draw: function(ctx, scale) {
+            // Assume all partitions are ArbitraryRegions
+            var bbox = {
+                xl: 0, xr: config.region.upperRight.x,
+                yt: 0, yb: config.region.upperRight.y
+            };
+            var medians = this.partitions.map(function(p) {
+                return {x: p.median.x, y: bbox.yb - p.median.y}
+            });
+            if (this.diagram) {
+                voronoi.recycle(this.diagram);
+            }
+            this.diagram = voronoi.compute(medians, bbox);
+            ctx.globalAlpha = 1;
+            ctx.beginPath();
+            ctx.strokeStyle = '#000';
+            // edges
+            this.diagram.edges.forEach(function(edge) {
+                var v = edge.va;
+                ctx.moveTo(scale*v.x, scale*(bbox.yb - v.y));
+                v = edge.vb;
+                ctx.lineTo(scale*v.x, scale*(bbox.yb - v.y));
+            });
+            ctx.stroke();
+            /*
             this.partitions.forEach(function(partition) {
                 partition.draw(ctx, scale);
             });
+            */
         }
     };
 
@@ -375,8 +401,8 @@ var imageCollector = function(expectedCount, completeFn) {
         queue.schedule(delay, function(state, queue, cb){
             ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
             var demand_count = state['demands'].length;
-            //config.strategy.draw(ctx, scale);
-            config.region.draw(ctx, scale);
+            config.strategy.draw(ctx, scale);
+            // config.region.draw(ctx, scale);
             for (var i=0; i < demand_count; i++) {
               var coords = (state.demands[i].x * scale) + "," + (state.demands[i].y * scale);
               if (typeof(demand_dict[coords]) !== 'undefined') {
