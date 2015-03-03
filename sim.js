@@ -257,20 +257,6 @@ KMeans.prototype.cluster = function(points, k, distance, snapshotPeriod, snapsho
           ctx.stroke();
     };
 
-    function ArbitraryRegion(p) {
-        this.median = {x: p.x, y: p.y};
-    }
-    ArbitraryRegion.prototype = Object.create(Region.prototype);
-    ArbitraryRegion.prototype.constructor = ArbitraryRegion;
-    ArbitraryRegion.prototype.uniformPoint = function() {
-    };
-    ArbitraryRegion.prototype.split = function(n) {
-    };
-    ArbitraryRegion.prototype.contains = function(p) {
-    };
-    ArbitraryRegion.prototype.draw = function(ctx, scale) {
-    };
-
     function Line(length, lowerLeft) {
         this.length = length;
         this.lowerLeft = lowerLeft;
@@ -464,7 +450,7 @@ KMeans.prototype.cluster = function(points, k, distance, snapshotPeriod, snapsho
             var min, minIndex;
             this.partitions.forEach(function(partition, i) {
                 var d = partition.distanceToMedian({x: demand.x, y: demand.y});
-                if (!min || d < min) {
+                if (min === undefined || d < min) {
                     min = d;
                     minIndex = i;
                 }
@@ -672,7 +658,7 @@ KMeans.prototype.cluster = function(points, k, distance, snapshotPeriod, snapsho
 
     var genDemand = function(state, demandNum) {
         // Can change this to do a circle...
-        return new Demand(config.region.betaPoint(6, 6), state.time, demandNum);
+        return new Demand(config.region.uniformPoint(), state.time, demandNum);
     };
 
     var addDemand = function(state, queue, demandNum) {
@@ -740,7 +726,7 @@ KMeans.prototype.cluster = function(points, k, distance, snapshotPeriod, snapsho
             simulationSpeed: .2,
             fps: 30,
             r: 0.5,
-            n: 16
+            n: 4
         };
 
         var state = {
