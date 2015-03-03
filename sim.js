@@ -9,6 +9,13 @@ var imageCollector = function(expectedCount, completeFn) {
     };
 }();
 
+function getParameterByName(name) {
+    name = name.replace(/[\[]/, "\\[").replace(/[\]]/, "\\]");
+    var regex = new RegExp("[\\?&]" + name + "=([^&#]*)"),
+        results = regex.exec(location.search);
+    return results === null ? "" : decodeURIComponent(results[1].replace(/\+/g, " "));
+}
+
 function Point(x, y){
   this._x = x;
   this._y = y;
@@ -726,7 +733,7 @@ KMeans.prototype.cluster = function(points, k, distance, snapshotPeriod, snapsho
             simulationSpeed: .2,
             fps: 30,
             r: 0.5,
-            n: 4
+            n: parseInt(getParameterByName('servers'), 10) || 4
         };
 
         var state = {
