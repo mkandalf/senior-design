@@ -665,7 +665,21 @@ KMeans.prototype.cluster = function(points, k, distance, snapshotPeriod, snapsho
 
     var genDemand = function(state, demandNum) {
         // Can change this to do a circle...
-        return new Demand(config.region.uniformPoint(), state.time, demandNum);
+        var point;
+        switch(getParameterByName('distribution')) {
+            case 'uniform':
+                point = config.region.uniformPoint();
+                break;
+            case 'beta':
+                var alpha = parseInt(getParameterByName('alpha'), 10) || 4;
+                var beta = parseInt(getParameterByName('beta'), 10) || 4;
+                point = config.region.betaPoint(alpha, beta);
+                break;
+            default:
+                point = config.region.uniformPoint();
+                break;
+        }
+        return new Demand(point, state.time, demandNum);
     };
 
     var addDemand = function(state, queue, demandNum) {
