@@ -410,7 +410,7 @@ KMeans.prototype.cluster = function(points, k, distance, snapshotPeriod, snapsho
           return false;
         },
         computeMedians: function() {
-            if (this.numUnchanged <= 4000) {
+          if ((this.demandsSeen.length % Math.floor(Math.sqrt(this.demandsSeen.length))) == 0) {
               this.mediansChanged = true;
               if (this.demandsSeen.length < this.n){
                 var k = new KMeans(this.medians);
