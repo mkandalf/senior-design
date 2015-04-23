@@ -59,7 +59,7 @@ function KMeans(centroids) {
    this.centroids = centroids || [];
 };
 
-KMeans.prototype.randomCentroids = function(points, k) {
+KMeans.randomCentroids = function(points, k) {
    var centroids = points.slice(0); // copy
    centroids.sort(function() {
       return (Math.round(Math.random()) - 0.5);
@@ -95,7 +95,7 @@ KMeans.prototype.cluster = function(points, k, distance, snapshotPeriod, snapsho
       distance = distances[distance];
    }
 
-   this.centroids = this.centroids || this.randomCentroids(points, k);
+   this.centroids = this.centroids || KMeans.randomCentroids(points, k);
 
    var assignment = new Array(points.length);
    var clusters = new Array(k);
@@ -184,6 +184,61 @@ KMeans.prototype.cluster = function(points, k, distance, snapshotPeriod, snapsho
             return Math.sqrt(Math.pow(this.median.x - p.x, 2) + Math.pow(this.median.y - p.y, 2));
         }
     };
+
+    function Rectangle(w, h, lowerLeft) {
+        this.w = w;
+        this.h = h;
+        this.lowerLeft = lowerLeft;
+        this.upperRight = {x: w + lowerLeft.x, y: h + lowerLeft.y};
+        this.median = {x: this.w/2 + this.lowerLeft.x, y: this.h/2 + this.lowerLeft.y};
+        this.points = _.shuffle(RAW_POINTS);
+    }
+    Rectangle.prototype = Object.create(Region.prototype);
+    Rectangle.prototype.constructor = Rectangle;
+    Rectangle.prototype.uniformPoint = function() {
+        return {x: Math.random() * this.w + this.lowerLeft.x, y: Math.random() * this.h + this.lowerLeft.y};
+    };
+    Rectangle.prototype.betaPoint = function(alpha, beta) {
+        return {x: rbeta(alpha, beta) * this.w + this.lowerLeft.x, y: rbeta(alpha, beta) * this.h + this.lowerLeft.y};
+    }
+    Rectangle.prototype.sample = function() {
+        if (!this.points.length) {
+            this.points = _.shuffle(RAW_POINTS);
+        }
+        var p = this.points.pop();
+        var normalized = {x: p.x / 868 * this.w, y: p.y / 868 * this.w};
+        return normalized;
+    };
+    Rectangle.prototype.split = function(n) {
+        if (Math.sqrt(n) * Math.sqrt(n) !== n) {
+            throw "Cannot split square into a non-square number of regions";
+        }
+        var root = Math.sqrt(n);
+        var ret = [];
+        for (var i = 0; i < root; i+=1) {
+            for (var j = 0; j < root; j+=1) {
+                ret.push(new Rectangle(this.w/root, this.h/root, {x:this.lowerLeft.x + this.w * i / root, y:this.lowerLeft.y + this.h * j / root}));
+            }
+        }
+        return ret;
+    };
+    Rectangle.prototype.contains = function(p) {
+        return (this.lowerLeft.x <= p.x && this.lowerLeft.x + this.w >= p.x) &&
+               (this.lowerLeft.y <= p.y && this.lowerLeft.y + this.h >= p.y);
+    };
+    Rectangle.prototype.draw = function(ctx, scale) {
+        ctx.lineWidth = 5;
+        ctx.strokeStyle = "#000000";
+        ctx.strokeRect(this.lowerLeft.x * scale, this.lowerLeft.y * scale, this.w * scale, this.h * scale);
+        ctx.beginPath();
+        ctx.arc(scale * this.median.x - 2, scale * this.median.y - 2, 4, 0, 2 * Math.PI, false);
+        //ctx.fillStyle = 'green';
+        ctx.fill();
+        ctx.lineWidth = 3;
+        //ctx.strokeStyle = "#003300";
+        ctx.stroke();
+    };
+
 
     function Square(size, lowerLeft) {
         this.size = size;
@@ -331,8 +386,10 @@ KMeans.prototype.cluster = function(points, k, distance, snapshotPeriod, snapsho
         this.n = n;
         this.partitions = config.region.split(n);
         this.medians = [];
+        this.originalMedians = [];
         for (var i = 0; i < this.partitions.length; i++){
             this.medians.push([this.partitions[i].median.x, this.partitions[i].median.y]);
+            this.originalMedians.push([this.partitions[i].median.x, this.partitions[i].median.y]);
         }
         this.mediansChanged = true;
         this.demandsSeen = [];
@@ -344,10 +401,24 @@ KMeans.prototype.cluster = function(points, k, distance, snapshotPeriod, snapsho
         this.computeMedians();
     };
     LearningStrategy.prototype = {
+        extantMedians: function() {
+          for (var i = 0; i < this.medians.length; i++){
+              if (this.medians[i][0] === this.originalMedians[i][0] && this.medians[i][1] === this.originalMedians[i][1]) {
+                  return true;
+              }
+          }
+          return false;
+        },
         computeMedians: function() {
             if (this.numUnchanged <= 4000) {
               this.mediansChanged = true;
-              var k = new KMeans(this.medians);
+              if (this.demandsSeen.length < this.n){
+                var k = new KMeans(this.medians);
+              } else if (this.extantMedians()) {
+                var k = new KMeans(KMeans.randomCentroids(this.demandsSeen, this.n));
+              } else {
+                var k = new KMeans(this.medians);
+              }
               var clusters = k.cluster(this.demandsSeen, this.n);
               this.clusters = clusters;
               this.medians = k.centroids;
@@ -757,7 +828,7 @@ KMeans.prototype.cluster = function(points, k, distance, snapshotPeriod, snapsho
         config = {
             lambda: 2.2,
             v: 1,
-            region: new Square(1, {x: 0, y: 0}),
+            region: new Rectangle(1.461, 1, {x: 0, y: 0}),
             simulationSpeed: .2,
             fps: 30,
             r: 0.5,
