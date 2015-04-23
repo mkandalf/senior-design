@@ -1,3 +1,6 @@
+// The largest x value from the data is 868
+// The largest y value from the data is 529
+
 var imageCollector = function(expectedCount, completeFn) {
     var receivedCount = 0;
     return function() {
@@ -187,6 +190,7 @@ KMeans.prototype.cluster = function(points, k, distance, snapshotPeriod, snapsho
         this.lowerLeft = lowerLeft;
         this.upperRight = {x: size + lowerLeft.x, y: size + lowerLeft.y};
         this.median = {x: this.size/2 + this.lowerLeft.x, y: this.size/2 + this.lowerLeft.y};
+        this.points = _.shuffle(RAW_POINTS);
     }
     Square.prototype = Object.create(Region.prototype);
     Square.prototype.constructor = Square;
@@ -196,6 +200,14 @@ KMeans.prototype.cluster = function(points, k, distance, snapshotPeriod, snapsho
     Square.prototype.betaPoint = function(alpha, beta) {
         return {x: rbeta(alpha, beta) * this.size + this.lowerLeft.x, y: rbeta(alpha, beta) * this.size + this.lowerLeft.y};
     }
+    Square.prototype.sample = function() {
+        if (!this.points.length) {
+            this.points = _.shuffle(RAW_POINTS);
+        }
+        var p = this.points.pop();
+        var normalized = {x: p.x / 868, y: p.y / 868};
+        return normalized;
+    };
     Square.prototype.split = function(n) {
         if (Math.sqrt(n) * Math.sqrt(n) !== n) {
             throw "Cannot split square into a non-square number of regions";
@@ -675,8 +687,10 @@ KMeans.prototype.cluster = function(points, k, distance, snapshotPeriod, snapsho
                 var beta = parseInt(getParameterByName('beta'), 10) || 4;
                 point = config.region.betaPoint(alpha, beta);
                 break;
+            case 'katrina':
+                point = config.region.sample();
             default:
-                point = config.region.uniformPoint();
+                point = config.region.sample();
                 break;
         }
         return new Demand(point, state.time, demandNum);
@@ -730,7 +744,7 @@ KMeans.prototype.cluster = function(points, k, distance, snapshotPeriod, snapsho
                 //ctx.lineTo(state.servers[i].arrivalEvent.metadata.destination.x * scale,state.servers[i].arrivalEvent.metadata.destination.y * scale);
                 ctx.stroke();
               }
-              ctx.drawImage(img, state.servers[i].x * scale - (75 / 2), state.servers[i].y * scale - (75 / 2), 75, 75);
+              ctx.drawImage(img, state.servers[i].x * scale - (60 / 2), state.servers[i].y * scale - (60 / 2), 60, 60);
             }
             config.strategy.draw(ctx, scale);
             scheduleNextAnimationFrame(state, queue, scale, img, ctx, demand_list, demand_dict, canvas);
