@@ -1,0 +1,58 @@
+<html>
+<head>
+  <script src="voronoi-core.js"></script>
+  <script src="underscore-min.js"></script>
+  <script src="convex_hull.js"></script>
+  <script src="beta.js"></script>
+  <script src="graham_scan.js"></script>
+  <script src="priority-queue.js"></script>
+  <script src="points.js"></script>
+  <script src="sim2.js"></script>
+  <style>
+    body { 
+      margin: 0;
+      background-image: url('katrina.png');
+      background-repeat: no-repeat;
+    }
+    #stats {
+      margin-top: 20px;
+      display: inline-block;
+      background-color: white;
+      opacity: 0.6;
+      width: 500px;
+      height: 400px;
+      vertical-align:top;
+    }
+    h1 {
+      margin-left: 40px;
+    }
+    h2 { 
+      margin-left: 20px;
+    }
+
+    canvas {
+      display: inline-block;
+      margin-right: 50px;
+    }
+  </style>
+</head>
+<body>
+  <div class="work">
+    <canvas id="canvas" width="700" height="700"></canvas>
+    <div id="stats">
+      <h1>Statistics</h1>
+      <h2 id="time"></h2>
+      <h2 id="distance"></h2>
+      <h2 id="slide"> Simulation speed
+        <input id="slider1" type="range" min=".05" max="10" step=".05" value=".1" />
+      </h2>
+      <h2 id="slide"> Return to median ratio
+        <input id="slider2" type="range" min=".01" max=".99" step=".01" value=".5" />
+      </h2>
+      <h2 id="slide"> Arrival rate
+        <input id="slider3" type="range" min=".01" max="4" step=".1" value="2" />
+      </h2>
+    </div>
+  </div>
+</body>
+</html>
